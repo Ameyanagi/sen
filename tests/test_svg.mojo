@@ -1,7 +1,9 @@
 from sen import (
     Figure,
+    LegendPosition,
     LineSeries,
     LineStyle,
+    MarkerStyle,
     Margins,
     MissingPolicy,
     PlotPoint,
@@ -101,6 +103,56 @@ def styled_series_figure() raises -> Figure:
     return figure^
 
 
+def markers_figure() raises -> Figure:
+    var markers: List[MarkerStyle] = [
+        MarkerStyle.CIRCLE,
+        MarkerStyle.SQUARE,
+        MarkerStyle.TRIANGLE,
+        MarkerStyle.DIAMOND,
+        MarkerStyle.PLUS,
+        MarkerStyle.CROSS,
+        MarkerStyle.STAR,
+    ]
+    var figure = Figure()
+    for index in range(len(markers)):
+        var xs: List[Float64] = [Float64(index)]
+        var ys: List[Float64] = [Float64(index % 2)]
+        var style = SeriesStyle().with_marker(markers[index])
+        figure.scatter(xs, ys, style=style)
+    return figure^
+
+
+def legend_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var first_y: List[Float64] = [0.0, 1.0, 0.5]
+    var second_y: List[Float64] = [1.5, 0.5, 1.0]
+    var marker_x: List[Float64] = [1.0]
+    var marker_y: List[Float64] = [1.25]
+    var dashed = SeriesStyle().with_line_style(LineStyle.DASHED)
+    var square = SeriesStyle().with_marker(MarkerStyle.SQUARE)
+    var figure = Figure()
+    figure.line(xs, first_y, label="observed")
+    figure.line(xs, second_y, label="forecast", style=dashed)
+    figure.scatter(marker_x, marker_y, label="sample & hold", style=square)
+    return figure^
+
+
+def grid_figure() raises -> Figure:
+    var figure = single_line_figure()
+    figure.set_grid(True)
+    return figure^
+
+
+def limits_figure() raises -> Figure:
+    var xs: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var ys: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_x_limits(0.0, 10.0)
+    figure.set_y_limits(0.0, 10.0)
+    return figure^
+
+
 def read_fixture(path: StringSlice) raises -> String:
     with open(path, "r") as fixture:
         return fixture.read()
@@ -169,6 +221,30 @@ def test_styled_series_golden_fixture_is_byte_exact() raises:
     assert_equal(actual, read_fixture("tests/fixtures/styled_series.svg"))
 
 
+def test_markers_golden_fixture_is_byte_exact() raises:
+    var figure = markers_figure()
+    var actual = render_svg(figure, 240.0, 140.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/markers.svg"))
+
+
+def test_legend_golden_fixture_is_byte_exact() raises:
+    var figure = legend_figure()
+    var actual = render_svg(figure, 240.0, 140.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/legend.svg"))
+
+
+def test_grid_golden_fixture_is_byte_exact() raises:
+    var figure = grid_figure()
+    var actual = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/grid.svg"))
+
+
+def test_limits_golden_fixture_is_byte_exact() raises:
+    var figure = limits_figure()
+    var actual = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/limits.svg"))
+
+
 def test_xml_escape_covers_predefined_entities_and_unicode() raises:
     assert_equal(
         _escape_xml("A&B <tag> \"quote\" 'apostrophe' 雪"),
@@ -234,6 +310,139 @@ def test_constant_domains_use_documented_padding() raises:
 
     assert_equal(count_occurrences(svg, "<polyline "), 1)
     assert_equal(count_occurrences(svg, 'points="68,34"'), 1)
+
+
+def test_every_marker_shape_uses_its_fixed_svg_element() raises:
+    var figure = markers_figure()
+    var svg = render_svg(figure, 240.0, 140.0, fixture_margins())
+
+    assert_equal(count_occurrences(svg, "<circle "), 1)
+    assert_equal(count_occurrences(svg, 'width="5" height="5" fill="#ff7f0e"'), 1)
+    assert_equal(count_occurrences(svg, "<polygon "), 3)
+    assert_equal(count_occurrences(svg, 'fill="#2ca02c"'), 1)
+    assert_equal(count_occurrences(svg, 'fill="#d62728"'), 1)
+    assert_equal(count_occurrences(svg, 'stroke="#9467bd" stroke-width="1.5"'), 2)
+    assert_equal(count_occurrences(svg, 'stroke="#8c564b" stroke-width="1.5"'), 2)
+    assert_equal(count_occurrences(svg, 'fill="#1f77b4"'), 2)
+
+
+def test_none_marker_on_scatter_falls_back_to_circle() raises:
+    var xs: List[Float64] = [0.0]
+    var ys: List[Float64] = [0.0]
+    var style = SeriesStyle().with_marker(MarkerStyle.NONE)
+    var figure = Figure()
+    figure.scatter(xs, ys, style=style)
+
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+    assert_equal(count_occurrences(svg, "<circle "), 1)
+    assert_equal(count_occurrences(svg, 'r="2.5" fill="#1f77b4"'), 1)
+
+
+def test_legend_trigger_rule_and_suppression() raises:
+    var unlabeled = single_line_figure()
+    var without_legend = render_svg(unlabeled, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(without_legend, 'fill="#ffffff" stroke="#d0d0d0"'),
+        0,
+    )
+
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var suppressed = Figure()
+    suppressed.line(xs, ys, label="visible label")
+    suppressed.set_legend(LegendPosition.NONE)
+    var svg = render_svg(suppressed, 200.0, 140.0, fixture_margins())
+    assert_equal(count_occurrences(svg, ">visible label</text>"), 0)
+    assert_equal(count_occurrences(svg, 'fill="#ffffff" stroke="#d0d0d0"'), 0)
+
+
+def test_legend_positions_use_the_requested_plot_corner() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var figure = Figure()
+    figure.line(xs, ys, label="a")
+
+    var upper_right = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(upper_right, '<rect x="146" y="16" width="38" height="24"'),
+        1,
+    )
+
+    figure.set_legend(LegendPosition.UPPER_LEFT)
+    var upper_left = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(upper_left, '<rect x="32" y="16" width="38" height="24"'),
+        1,
+    )
+
+    figure.set_legend(LegendPosition.LOWER_LEFT)
+    var lower_left = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(lower_left, '<rect x="32" y="88" width="38" height="24"'),
+        1,
+    )
+
+    figure.set_legend(LegendPosition.LOWER_RIGHT)
+    var lower_right = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(lower_right, '<rect x="146" y="88" width="38" height="24"'),
+        1,
+    )
+
+
+def test_legend_is_escaped_styled_and_drawn_after_series() raises:
+    var figure = legend_figure()
+    var svg = render_svg(figure, 240.0, 140.0, fixture_margins())
+    var series_end = first_occurrence(svg, "  </g>")
+    var legend_rect = first_occurrence(svg, 'fill="#ffffff" stroke="#d0d0d0"')
+
+    assert_true(series_end >= 0)
+    assert_true(series_end < legend_rect)
+    assert_equal(count_occurrences(svg, ">sample &amp; hold</text>"), 1)
+    assert_equal(count_occurrences(svg, 'stroke-dasharray="6 3"'), 2)
+    assert_equal(count_occurrences(svg, 'font-size="8" text-anchor="start"'), 3)
+    assert_equal(count_occurrences(svg, 'width="5" height="5" fill="#2ca02c"'), 2)
+
+
+def test_grid_is_off_by_default_and_on_behind_axes_and_series() raises:
+    var off = single_line_figure()
+    var without_grid = render_svg(off, 200.0, 140.0, fixture_margins())
+    assert_equal(count_occurrences(without_grid, "#e0e0e0"), 0)
+
+    var on = grid_figure()
+    var svg = render_svg(on, 200.0, 140.0, fixture_margins())
+    var frame = first_occurrence(svg, 'stroke="#d0d0d0"')
+    var grid = first_occurrence(svg, 'stroke="#e0e0e0"')
+    var axis = first_occurrence(svg, 'stroke="#222222"')
+    var series = first_occurrence(svg, "<g clip-path=")
+    assert_true(frame < grid)
+    assert_true(grid < axis)
+    assert_true(axis < series)
+
+
+def test_explicit_limits_define_exact_ticks_and_clipped_geometry() raises:
+    var figure = limits_figure()
+    var svg = render_svg(figure, 200.0, 140.0, fixture_margins())
+
+    assert_equal(count_occurrences(svg, 'points="-60,176 24,120 192,8 276,-48"'), 1)
+    assert_equal(count_occurrences(svg, '<line x1="24" y1="120" x2="24" y2="124"'), 1)
+    assert_equal(count_occurrences(svg, '<line x1="192" y1="120" x2="192" y2="124"'), 1)
+    assert_equal(count_occurrences(svg, '<clipPath id="sen-plot-area">'), 1)
+    assert_equal(count_occurrences(svg, '<g clip-path="url(#sen-plot-area)">'), 1)
+
+
+def test_one_explicit_axis_leaves_the_other_axis_autoscaled() raises:
+    var xs: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var ys: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_x_limits(0.0, 10.0)
+
+    var svg = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(
+        count_occurrences(svg, 'points="-60,114.909 24,89.455 192,38.545 276,13.091"'),
+        1,
+    )
 
 
 def test_lines_and_scatters_render_in_interleaved_insertion_order() raises:

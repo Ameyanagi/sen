@@ -5,6 +5,7 @@ from .scale import LinearScale, StickyEdges, linear_ticks, view_bounds
 from .series import (
     DataBounds,
     Figure,
+    LegendPosition,
     LineSeries,
     MissingPolicy,
     PlotPoint,

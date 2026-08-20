@@ -2,6 +2,7 @@ from sen import (
     Figure,
     LineSeries,
     LineStyle,
+    MarkerStyle,
     Margins,
     MissingPolicy,
     PlotPoint,
@@ -100,6 +101,56 @@ def styled_series_figure() raises -> Figure:
     return figure^
 
 
+def markers_figure() raises -> Figure:
+    var markers: List[MarkerStyle] = [
+        MarkerStyle.CIRCLE,
+        MarkerStyle.SQUARE,
+        MarkerStyle.TRIANGLE,
+        MarkerStyle.DIAMOND,
+        MarkerStyle.PLUS,
+        MarkerStyle.CROSS,
+        MarkerStyle.STAR,
+    ]
+    var figure = Figure()
+    for index in range(len(markers)):
+        var xs: List[Float64] = [Float64(index)]
+        var ys: List[Float64] = [Float64(index % 2)]
+        var style = SeriesStyle().with_marker(markers[index])
+        figure.scatter(xs, ys, style=style)
+    return figure^
+
+
+def legend_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var first_y: List[Float64] = [0.0, 1.0, 0.5]
+    var second_y: List[Float64] = [1.5, 0.5, 1.0]
+    var marker_x: List[Float64] = [1.0]
+    var marker_y: List[Float64] = [1.25]
+    var dashed = SeriesStyle().with_line_style(LineStyle.DASHED)
+    var square = SeriesStyle().with_marker(MarkerStyle.SQUARE)
+    var figure = Figure()
+    figure.line(xs, first_y, label="observed")
+    figure.line(xs, second_y, label="forecast", style=dashed)
+    figure.scatter(marker_x, marker_y, label="sample & hold", style=square)
+    return figure^
+
+
+def grid_figure() raises -> Figure:
+    var figure = single_line_figure()
+    figure.set_grid(True)
+    return figure^
+
+
+def limits_figure() raises -> Figure:
+    var xs: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var ys: List[Float64] = [-5.0, 0.0, 10.0, 15.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_x_limits(0.0, 10.0)
+    figure.set_y_limits(0.0, 10.0)
+    return figure^
+
+
 def main() raises:
     var margins = fixture_margins()
     var single = single_line_figure()
@@ -137,4 +188,24 @@ def main() raises:
         "tests/fixtures/styled_series.svg",
         render_svg(styled, 160.0, 100.0, margins),
     )
-    print("Regenerated 7 SVG fixtures under tests/fixtures/.")
+    var markers = markers_figure()
+    save_svg(
+        "tests/fixtures/markers.svg",
+        render_svg(markers, 240.0, 140.0, margins),
+    )
+    var legend = legend_figure()
+    save_svg(
+        "tests/fixtures/legend.svg",
+        render_svg(legend, 240.0, 140.0, margins),
+    )
+    var grid = grid_figure()
+    save_svg(
+        "tests/fixtures/grid.svg",
+        render_svg(grid, 200.0, 140.0, margins),
+    )
+    var limits = limits_figure()
+    save_svg(
+        "tests/fixtures/limits.svg",
+        render_svg(limits, 200.0, 140.0, margins),
+    )
+    print("Regenerated 11 SVG fixtures under tests/fixtures/.")

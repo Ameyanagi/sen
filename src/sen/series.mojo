@@ -542,6 +542,24 @@ struct _SeriesOrder(Copyable, ImplicitlyCopyable):
         self.index = index
 
 
+struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
+    """A nominal in-plot legend position; ``NONE`` suppresses the legend."""
+
+    var _value: Int
+
+    comptime UPPER_RIGHT = LegendPosition(_value=0)
+    comptime UPPER_LEFT = LegendPosition(_value=1)
+    comptime LOWER_LEFT = LegendPosition(_value=2)
+    comptime LOWER_RIGHT = LegendPosition(_value=3)
+    comptime NONE = LegendPosition(_value=4)
+
+    def __init__(out self, *, _value: Int):
+        self._value = _value
+
+    def __eq__(self, other: Self) -> Bool:
+        return self._value == other._value
+
+
 struct Figure(Copyable):
     """A renderer-neutral collection preserving interleaved series draw order.
 
@@ -563,6 +581,14 @@ struct Figure(Copyable):
     var _title: String
     var _x_label: String
     var _y_label: String
+    var _legend_position: LegendPosition
+    var _grid_enabled: Bool
+    var _has_x_limits: Bool
+    var _x_limit_lo: Float64
+    var _x_limit_hi: Float64
+    var _has_y_limits: Bool
+    var _y_limit_lo: Float64
+    var _y_limit_hi: Float64
 
     def __init__(out self):
         self._lines = List[LineSeries]()
@@ -575,6 +601,14 @@ struct Figure(Copyable):
         self._title = String()
         self._x_label = String()
         self._y_label = String()
+        self._legend_position = LegendPosition.UPPER_RIGHT
+        self._grid_enabled = False
+        self._has_x_limits = False
+        self._x_limit_lo = 0.0
+        self._x_limit_hi = 1.0
+        self._has_y_limits = False
+        self._y_limit_lo = 0.0
+        self._y_limit_hi = 1.0
 
     def _insert_line(
         mut self, var line: LineSeries, var label: String, style: SeriesStyle
@@ -633,6 +667,8 @@ struct Figure(Copyable):
 
         Because disconnected topology has no meaning for markers, ``SEGMENT``
         behaves identically to ``DROP``. ``ERROR`` still rejects the first NaN.
+        A ``MarkerStyle.NONE`` style falls back to ``CIRCLE`` at render time so
+        the marker-only series remains visible.
         """
         var series = ScatterSeries._from_xy_missing(x, y, missing)
         self._insert_scatter(series^, label^, style)
@@ -649,6 +685,34 @@ struct Figure(Copyable):
         """Set arbitrary y-axis label text; no input validation is required."""
         self._y_label = label^
 
+    def set_legend(mut self, position: LegendPosition):
+        """Place the automatically triggered legend or suppress it with ``NONE``."""
+        self._legend_position = position
+
+    def set_grid(mut self, enabled: Bool):
+        """Enable or disable major gridlines."""
+        self._grid_enabled = enabled
+
+    def set_x_limits(mut self, lo: Float64, hi: Float64) raises:
+        """Set an exact finite increasing x-axis domain override."""
+        if not isfinite(lo) or not isfinite(hi):
+            raise Error("x limits must be finite; got lo = ", lo, ", hi = ", hi)
+        if lo >= hi:
+            raise Error("x limits must satisfy lo < hi; got lo = ", lo, ", hi = ", hi)
+        self._has_x_limits = True
+        self._x_limit_lo = lo
+        self._x_limit_hi = hi
+
+    def set_y_limits(mut self, lo: Float64, hi: Float64) raises:
+        """Set an exact finite increasing y-axis domain override."""
+        if not isfinite(lo) or not isfinite(hi):
+            raise Error("y limits must be finite; got lo = ", lo, ", hi = ", hi)
+        if lo >= hi:
+            raise Error("y limits must satisfy lo < hi; got lo = ", lo, ", hi = ", hi)
+        self._has_y_limits = True
+        self._y_limit_lo = lo
+        self._y_limit_hi = hi
+
     def title(self) -> ref[self._title] String:
         return self._title
 
@@ -658,8 +722,56 @@ struct Figure(Copyable):
     def y_label(self) -> ref[self._y_label] String:
         return self._y_label
 
+    def legend_position(self) -> LegendPosition:
+        return self._legend_position
+
+    def grid_enabled(self) -> Bool:
+        return self._grid_enabled
+
+    def x_limits(self) -> Optional[Tuple[Float64, Float64]]:
+        """Return the exact x-domain override, or absence when autoscaling."""
+        if self._has_x_limits:
+            return (self._x_limit_lo, self._x_limit_hi)
+        return None
+
+    def y_limits(self) -> Optional[Tuple[Float64, Float64]]:
+        """Return the exact y-domain override, or absence when autoscaling."""
+        if self._has_y_limits:
+            return (self._y_limit_lo, self._y_limit_hi)
+        return None
+
     def validate(self) raises:
         """Validate stored series and insertion-order metadata explicitly."""
+        if self._has_x_limits:
+            if not isfinite(self._x_limit_lo) or not isfinite(self._x_limit_hi):
+                raise Error(
+                    "x limits must be finite; got lo = ",
+                    self._x_limit_lo,
+                    ", hi = ",
+                    self._x_limit_hi,
+                )
+            if self._x_limit_lo >= self._x_limit_hi:
+                raise Error(
+                    "x limits must satisfy lo < hi; got lo = ",
+                    self._x_limit_lo,
+                    ", hi = ",
+                    self._x_limit_hi,
+                )
+        if self._has_y_limits:
+            if not isfinite(self._y_limit_lo) or not isfinite(self._y_limit_hi):
+                raise Error(
+                    "y limits must be finite; got lo = ",
+                    self._y_limit_lo,
+                    ", hi = ",
+                    self._y_limit_hi,
+                )
+            if self._y_limit_lo >= self._y_limit_hi:
+                raise Error(
+                    "y limits must satisfy lo < hi; got lo = ",
+                    self._y_limit_lo,
+                    ", hi = ",
+                    self._y_limit_hi,
+                )
         for index in range(len(self._lines)):
             self._lines[index].validate()
         for index in range(len(self._scatters)):
@@ -790,6 +902,12 @@ struct Figure(Copyable):
         if entry.kind._value == _SeriesKind.LINE._value:
             return self._line_styles[entry.index]
         return self._scatter_styles[entry.index]
+
+    def _series_label(self, index: Int) -> String:
+        ref entry = self._order[index]
+        if entry.kind._value == _SeriesKind.LINE._value:
+            return self._line_labels[entry.index].copy()
+        return self._scatter_labels[entry.index].copy()
 
     def save_svg(self, path: StringSlice) raises:
         """Render at 640 by 480 with default margins and save to ``path``."""

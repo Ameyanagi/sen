@@ -1,6 +1,7 @@
 from sen import (
     DataBounds,
     Figure,
+    LegendPosition,
     LineSeries,
     MissingPolicy,
     PlotPoint,
@@ -678,6 +679,54 @@ def test_figure_text_setters_round_trip_any_string() raises:
     assert_equal(figure.title(), "A <title>")
     assert_equal(figure.x_label(), "x & time")
     assert_equal(figure.y_label(), "'value'")
+
+
+def test_figure_legend_and_grid_defaults_and_setters() raises:
+    var figure = Figure()
+
+    assert_true(figure.legend_position() == LegendPosition.UPPER_RIGHT)
+    assert_false(figure.grid_enabled())
+
+    figure.set_legend(LegendPosition.LOWER_LEFT)
+    figure.set_grid(True)
+
+    assert_true(figure.legend_position() == LegendPosition.LOWER_LEFT)
+    assert_true(figure.grid_enabled())
+
+
+def test_figure_axis_limits_validate_and_round_trip() raises:
+    var figure = Figure()
+    assert_true(not figure.x_limits())
+    assert_true(not figure.y_limits())
+
+    figure.set_x_limits(-2.5, 3.5)
+    figure.set_y_limits(10.0, 20.0)
+
+    var x_limits = figure.x_limits().value()
+    var y_limits = figure.y_limits().value()
+    assert_true(x_limits[0] == -2.5)
+    assert_true(x_limits[1] == 3.5)
+    assert_true(y_limits[0] == 10.0)
+    assert_true(y_limits[1] == 20.0)
+
+
+def test_figure_axis_limits_reject_invalid_values_with_context() raises:
+    var figure = Figure()
+    with assert_raises(contains="lo = 3.0, hi = 3.0"):
+        figure.set_x_limits(3.0, 3.0)
+    with assert_raises(contains="lo = 4.0, hi = -1.0"):
+        figure.set_x_limits(4.0, -1.0)
+    with assert_raises(contains="lo = nan, hi = 1.0"):
+        figure.set_x_limits(Float64("nan"), 1.0)
+    with assert_raises(contains="lo = 0.0, hi = inf"):
+        figure.set_x_limits(0.0, Float64("inf"))
+
+    with assert_raises(contains="lo = 2.0, hi = 2.0"):
+        figure.set_y_limits(2.0, 2.0)
+    with assert_raises(contains="lo = 5.0, hi = 4.0"):
+        figure.set_y_limits(5.0, 4.0)
+    with assert_raises(contains="lo = -inf, hi = 1.0"):
+        figure.set_y_limits(Float64("-inf"), 1.0)
 
 
 def main() raises:
