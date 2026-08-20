@@ -54,11 +54,13 @@ before returning them.
 ```mojo
 from sen import Figure, LineSeries, PlotPoint
 
-var line = LineSeries()
-line.append(PlotPoint(0.0, 1.0))
-line.start_segment(PlotPoint(2.0, 3.0))  # Explicit gap before this point.
-var figure = Figure()
-figure.add_line(line)
+
+def main() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 1.0))
+    line.start_segment(PlotPoint(2.0, 3.0))  # Explicit gap before this point.
+    var figure = Figure()
+    figure.add_line(line)
 ```
 
 ## Repository map
