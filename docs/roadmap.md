@@ -18,8 +18,8 @@ manual/release gate; it is not part of the routine CI task until S4.3 lands.
   `DataBounds`, and reject mutated nonfinite/reversed state before observation.
 - [x] **S0.3 Figure seed:** own an ordered collection of line series without
   backend, color, filesystem, or scientific-algorithm dependencies.
-- [ ] **S0.4 Missing-data policy:** decide whether gaps use segmented series,
-  optional points, or another nominal representation before accepting NaN.
+- [x] **S0.4 Missing-data policy:** represent gaps as explicit segment starts;
+  every stored point remains finite and missing samples never affect bounds.
 
 Completion gate: `from sen import Figure, LineSeries, PlotPoint` compiles from
 the installed package; empty state and bounds behavior have invariant tests.

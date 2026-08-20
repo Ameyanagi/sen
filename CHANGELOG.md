@@ -9,6 +9,8 @@ and uses semantic versioning after the first public release.
 
 - Initial experimental repository scaffold.
 - Renderer-neutral plot points, line series, data bounds, and figures.
+- Explicit line segments as the nominal missing-data policy, without NaN
+  sentinels or renderer dependencies.
 
 ### Changed
 

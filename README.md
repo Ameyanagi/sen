@@ -43,17 +43,20 @@ The Mojo import is `sen`. The eventual Conda distribution is
 `__init__.mojo` defines the package boundary.
 
 The first public slice is deliberately renderer-neutral: constructor-validated
-`PlotPoint` values, ordered `LineSeries` data with validated optional bounds, and
-a `Figure` that owns line-series semantics without SVG, native-window, or Akari
-coupling. Because Mojo 1.0 struct storage remains externally mutable, semantic
-accessors and operations revalidate current points, bounds, and series before
-returning them.
+`PlotPoint` values, ordered and explicitly segmented `LineSeries` data with
+validated optional bounds, and a `Figure` that owns line-series semantics
+without SVG, native-window, or Akari coupling. Missing observations start a new
+segment at the next finite point; NaN is never stored as a sentinel. Because
+Mojo 1.0 struct storage remains externally mutable, semantic accessors and
+operations revalidate current points, segment boundaries, bounds, and series
+before returning them.
 
 ```mojo
 from sen import Figure, LineSeries, PlotPoint
 
 var line = LineSeries()
 line.append(PlotPoint(0.0, 1.0))
+line.start_segment(PlotPoint(2.0, 3.0))  # Explicit gap before this point.
 var figure = Figure()
 figure.add_line(line)
 ```

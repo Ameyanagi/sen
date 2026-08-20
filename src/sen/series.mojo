@@ -108,22 +108,55 @@ struct DataBounds(Copyable, ImplicitlyCopyable):
 
 
 struct LineSeries(Copyable):
-    """An ordered line-series in data coordinates, independent of rendering."""
+    """An ordered, explicitly segmented line-series in data coordinates.
+
+    Every stored point is finite. Missing observations are represented by
+    starting a new segment at the next finite point, never by storing NaN.
+    """
 
     var _points: List[PlotPoint]
+    var _segment_starts: List[Int]
 
     def __init__(out self, var points: List[PlotPoint] = List[PlotPoint]()) raises:
         for index in range(len(points)):
             points[index]._validate()
         self._points = points^
+        self._segment_starts = List[Int]()
+        if len(self._points) > 0:
+            self._segment_starts.append(0)
 
     def _validate(self) raises:
         for index in range(len(self._points)):
             self._points[index]._validate()
+        if len(self._points) == 0:
+            if len(self._segment_starts) != 0:
+                raise Error("empty line-series must not contain segments")
+            return
+        if len(self._segment_starts) == 0 or self._segment_starts[0] != 0:
+            raise Error("nonempty line-series must start with segment zero")
+        var previous = -1
+        for index in range(len(self._segment_starts)):
+            var start = self._segment_starts[index]
+            if start <= previous or start >= len(self._points):
+                raise Error("line-series segment starts must be ordered points")
+            previous = start
 
     def append(mut self, point: PlotPoint) raises:
+        self._validate()
         point._validate()
+        if len(self._points) == 0:
+            self._segment_starts.append(0)
         self._points.append(point)
+
+    def start_segment(mut self, point: PlotPoint) raises:
+        """Append ``point`` as the first point after an explicit data gap."""
+        self._validate()
+        point._validate()
+        if len(self._points) == 0:
+            raise Error("a new line segment requires an existing point")
+        var start = len(self._points)
+        self._points.append(point)
+        self._segment_starts.append(start)
 
     def is_empty(self) -> Bool:
         return len(self._points) == 0
@@ -131,19 +164,39 @@ struct LineSeries(Copyable):
     def point_count(self) -> Int:
         return len(self._points)
 
+    def segment_count(self) -> Int:
+        return len(self._segment_starts)
+
     def point(self, index: Int) raises -> PlotPoint:
         """Return a point by position, rejecting indices outside the series."""
+        self._validate()
         if index < 0 or index >= len(self._points):
             raise Error("line-series point index is out of bounds")
-        self._points[index]._validate()
         return self._points[index]
+
+    def segment_point_count(self, segment_index: Int) raises -> Int:
+        """Return the number of points in one connected line segment."""
+        self._validate()
+        if segment_index < 0 or segment_index >= len(self._segment_starts):
+            raise Error("line-series segment index is out of bounds")
+        var end = len(self._points)
+        if segment_index + 1 < len(self._segment_starts):
+            end = self._segment_starts[segment_index + 1]
+        return end - self._segment_starts[segment_index]
+
+    def segment_point(self, segment_index: Int, point_index: Int) raises -> PlotPoint:
+        """Return a point by segment-local position."""
+        var count = self.segment_point_count(segment_index)
+        if point_index < 0 or point_index >= count:
+            raise Error("line-segment point index is out of bounds")
+        return self._points[self._segment_starts[segment_index] + point_index]
 
     def bounds(self) raises -> Optional[DataBounds]:
         """Return the finite extent, or ``None`` when the series is empty."""
+        self._validate()
         if self.is_empty():
             return None
         var first = self._points[0]
-        first._validate()
         var result = DataBounds(first._x, first._x, first._y, first._y)
         for index in range(1, len(self._points)):
             result = result.including(self._points[index])

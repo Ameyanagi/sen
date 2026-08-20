@@ -32,6 +32,43 @@ def test_line_series_preserves_order_and_computes_bounds() raises:
     assert_true(bounds.value().y_max() == 3.0)
 
 
+def test_explicit_segments_represent_gaps_without_nonfinite_points() raises:
+    var line = LineSeries()
+    assert_equal(line.segment_count(), 0)
+    line.append(PlotPoint(0.0, 1.0))
+    line.append(PlotPoint(1.0, 2.0))
+    line.start_segment(PlotPoint(3.0, -1.0))
+    line.append(PlotPoint(4.0, 5.0))
+
+    assert_equal(line.point_count(), 4)
+    assert_equal(line.segment_count(), 2)
+    assert_equal(line.segment_point_count(0), 2)
+    assert_equal(line.segment_point_count(1), 2)
+    assert_true(line.segment_point(0, 1).x() == 1.0)
+    assert_true(line.segment_point(1, 0).x() == 3.0)
+
+    var bounds = line.bounds()
+    assert_true(bounds)
+    assert_true(bounds.value().x_min() == 0.0)
+    assert_true(bounds.value().x_max() == 4.0)
+    assert_true(bounds.value().y_min() == -1.0)
+    assert_true(bounds.value().y_max() == 5.0)
+
+
+def test_segment_boundaries_are_nominal_and_checked() raises:
+    var line = LineSeries()
+    with assert_raises(contains="new line segment requires an existing point"):
+        line.start_segment(PlotPoint(1.0, 2.0))
+
+    line.append(PlotPoint(0.0, 1.0))
+    with assert_raises(contains="line-series segment index is out of bounds"):
+        _ = line.segment_point_count(-1)
+    with assert_raises(contains="line-series segment index is out of bounds"):
+        _ = line.segment_point_count(1)
+    with assert_raises(contains="line-segment point index is out of bounds"):
+        _ = line.segment_point(0, 1)
+
+
 def test_series_and_figure_indices_are_checked() raises:
     var line = LineSeries()
     with assert_raises(contains="line-series point index is out of bounds"):
@@ -77,6 +114,17 @@ def test_semantic_operations_revalidate_mutated_storage() raises:
         _ = line.point(0)
     with assert_raises(contains="plot coordinates must be finite"):
         _ = line.bounds()
+
+    var segmented = LineSeries()
+    segmented.append(PlotPoint(0.0, 1.0))
+    segmented.start_segment(PlotPoint(2.0, 3.0))
+    segmented._segment_starts[1] = 0
+    with assert_raises(contains="segment starts must be ordered points"):
+        _ = segmented.segment_point_count(0)
+    with assert_raises(contains="segment starts must be ordered points"):
+        _ = segmented.bounds()
+    with assert_raises(contains="segment starts must be ordered points"):
+        segmented.append(PlotPoint(4.0, 5.0))
 
     var bounds = DataBounds(0.0, 1.0, 0.0, 1.0)
     bounds._x_min = 2.0
