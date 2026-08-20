@@ -201,15 +201,21 @@ generic function-valued scale would hide those invariants.
 
 ## Ticks
 
-A tick locator consumes a validated domain and a positive target count and
-returns owned finite tick values in visual order. A formatter converts those
-values to deterministic labels without locale, environment, or backend state.
+A tick locator consumes a validated domain and an integer target count from 2
+through 32 inclusive and returns owned finite tick values in visual order. It
+may emit at most 64 ticks; reaching that checked budget is an error rather than
+permission to continue an unbounded loop. Reachable target-count mutation is
+revalidated before location. A formatter converts the values to deterministic
+labels without locale, environment, or backend state.
 
 The linear locator should use human-readable steps drawn from a small declared
 family such as `1`, `2`, `2.5`, `5`, and `10` times a power of ten. Tests fix
 the tie-breaking, endpoint inclusion, reversed-domain order, negative-zero
 canonicalization, and behavior for tiny and huge finite domains. The requested
-count is a target, not a promise that permits duplicate ticks.
+count is a target, not a promise that permits duplicate ticks. Step generation
+uses checked exponent and multiplication operations so the tiny and huge
+finite-domain cases cannot turn into zero, infinity, or a nonterminating
+progression.
 
 Tick location, label formatting, and tick rendering remain separate. Users may
 later supply explicit values and labels, but v0.1 should not accept arbitrary
@@ -217,8 +223,13 @@ callbacks whose output cannot be validated or reproduced.
 
 ## Layout and lowering
 
-Layout operates in finite logical output coordinates. It is deterministic for
-the same semantic Figure, output size, and theme. The pipeline is:
+Layout operates in finite logical output coordinates. Public output width and
+height are `Int` values from 1 through `2^31 - 1`; checked conversion produces
+the exact `Float64` logical extent. The origin is at the top left, positive x
+points right, positive y points down, and one logical unit is one SVG user unit
+and one Kagerou device pixel. Pixel centers are at `(x + 0.5, y + 0.5)`. Layout
+is deterministic for the same semantic Figure, output size, and theme. The
+pipeline is:
 
 1. validate the complete owned Figure snapshot;
 2. resolve visible data bounds and axis domains;
@@ -229,12 +240,20 @@ the same semantic Figure, output size, and theme. The pipeline is:
 7. lower series, axes, grid, ticks, labels, clipping, and legend samples into an
    ordered `RenderPlan`.
 
-v0.1 uses a documented deterministic text-extent estimate based on font size
-and character count. It does not ask a renderer to measure host-installed
-fonts, because that would make layout and snapshots backend- and machine-
-dependent. The SVG specifies a fallback font family and positions text using
-the same estimate. Accurate shaping is a later text subsystem contract, not a
-reason to make the initial layout nondeterministic.
+v0.1 accepts only single-line label text whose Unicode scalar values are valid
+under the XML policy below. It rejects CR, LF, NEL, Unicode line separator, and
+paragraph separator. Text metrics count Unicode scalar values—not UTF-8 bytes
+or grapheme clusters—and deliberately assign every scalar the same advance.
+For font size `s`, advance is `0.6 * s` per scalar, ascent is `0.8 * s`, descent
+is `0.2 * s`, and line height is `1.2 * s`. Empty text has zero advance but the
+same ascent and descent. These constants and arithmetic order are fixtures.
+
+Layout does not ask a renderer to measure host-installed fonts, because that
+would make layout and snapshots backend- and machine-dependent. SVG specifies
+the fixed fallback family `sans-serif` and positions text with the same metric
+and explicit anchor. Accurate shaping and visually identical glyph outlines
+are later text-subsystem contracts; v0.1 promises deterministic layout and SVG
+bytes, not identical host-font glyphs.
 
 Layout failure is explicit when the requested finite positive output size
 cannot contain the required boxes. It must not create negative rectangles,
@@ -243,28 +262,54 @@ have a documented priority order only after tests establish it.
 
 ## Render plan
 
-`RenderPlan` is an internal owned value containing output size and a small
-ordered command vocabulary. The initial commands are conceptually:
+`RenderPlan` is an internal owned value containing positive integer output size
+and a small ordered command vocabulary. Its coordinates are finite `Float64`
+values in the top-left, positive-y-down logical system defined by layout. The
+v0.1 commands are exactly:
 
 ```text
-fill rectangle
-stroke line/path
-draw markers
-draw text
-push rectangular clip
-pop clip
+FillRect
+FillPath
+StrokePath
+DrawText
+PushRectClip
+PopClip
 ```
 
-Commands contain finite logical coordinates and fully resolved internal styles.
-They contain no source data iterators, axis-domain logic, tick locators,
-filesystem paths, SVG fragments, device handles, or Kagerou surfaces. Clip
-stack balance and rectangle validity are checked when the plan is built and in
-backend conformance tests.
+`RenderPath` is immutable generic geometry with move, line, quadratic, cubic,
+and close commands. Every nonempty subpath begins with move; all coordinates
+are finite; explicit closure remains distinct from an open subpath. `FillPath`
+contains a resolved nonzero or even-odd fill rule. `StrokePath` contains a
+positive finite width in logical units, butt/round/square cap,
+miter/round/bevel join, finite miter limit at least `1.0`, and either a solid
+stroke or a validated even-length sequence of positive finite dash lengths with
+a finite offset normalized into its positive cycle. Strokes are centered on
+their path.
 
-The plan order is semantic: background, grid, clipped data marks, axes/spines,
-ticks and labels, legend, then figure-level titles. Series preserve insertion
-order within the data layer. A later z-order feature must be nominal and have a
-stable tie-breaker rather than depend on hash or pointer order.
+`DrawText` contains validated single-line text, finite origin, positive finite
+font size, the fixed fallback family, normal or bold weight, straight resolved
+color, horizontal `start`/`middle`/`end` anchor, and the v0.1 alphabetic
+baseline. Rectangles contain finite ordered edges and denote continuous closed
+geometry; a clip contains its boundary. Backends may differ in antialiasing but
+may not change these geometric semantics.
+
+Commands contain fully resolved internal styles. They contain no source data
+iterators, marker names, axis-domain logic, tick locators, filesystem paths,
+SVG fragments, device handles, or Kagerou surfaces. Line-series segments, line
+markers, scatter markers, axes, grid lines, ticks, and legend samples are all
+lowered to generic paths or rectangles before the plan is complete. A marker
+shape is therefore Sen lowering input, never a backend command. Repeated generic
+path instancing may be added later as an internal optimization only if each
+instance retains an explicit path and affine transform.
+
+Clip stack balance and rectangle validity are checked when the plan is built
+and in backend conformance tests. The plan also revalidates those invariants at
+the backend boundary because Mojo 1.0 storage remains externally reachable.
+
+The plan order is semantic: background, grid, clipped data geometry,
+axes/spines, ticks and labels, legend, then figure-level titles. Series preserve
+insertion order within the data layer. A later z-order feature must be nominal
+and have a stable tie-breaker rather than depend on hash or pointer order.
 
 Render-plan types remain internal in v0.1. Exposing them would freeze a backend
 ABI before the SVG reference implementation demonstrates the smallest useful
@@ -281,9 +326,10 @@ emit resolved primitive commands in order
 finish or return an error
 ```
 
-A backend may optimize path batches or marker reuse, but it must preserve
-command order, clipping, coordinates, styles, and text content. Backend failure
-uses `raises`; a partially rendered output is never returned as successful.
+A backend may optimize path batches or repeated generic geometry, but it must
+preserve command order, clipping, coordinate convention, fill/stroke geometry,
+styles, anchors, and text content. Backend failure uses `raises`; a partially
+rendered output is never returned as successful.
 
 Plotters shows the value of a small primitive trait and default fallbacks.
 Matplotlib shows that renderer specialization can be useful for repeated paths.
@@ -292,8 +338,8 @@ through Figure, Axes, or Series types. Static dispatch can be introduced inside
 the rendering module when there is a second backend.
 
 Until then the SVG encoder is the one concrete consumer, and the internal trait
-should not be exported. A fake recording backend in tests proves that lowering
-does not depend on SVG serialization.
+is not exported. A fake recording backend in tests proves that lowering does
+not depend on SVG serialization.
 
 ## SVG-first serialization
 
@@ -310,14 +356,51 @@ The SVG encoder guarantees:
 
 - UTF-8 XML with one declared namespace and finite positive `viewBox`;
 - deterministic element and attribute order;
-- locale-independent shortest documented numeric formatting;
+- the locale-independent numeric grammar below;
 - canonical zero instead of negative zero;
-- XML escaping for text and attribute values;
-- stable sequential IDs derived from render-plan order;
+- XML-scalar validation plus context-correct escaping for text and attributes;
+- content-prefixed sequential IDs derived without time or randomness;
 - balanced elements and clip references;
 - no timestamp, random UUID, environment-derived metadata, host path, or
   compiler-specific object identity;
 - identical bytes for identical validated input on every supported target.
+
+### Canonical SVG numbers
+
+Every SVG number is the shortest correctly rounded decimal that parses back to
+the same finite `Float64` under round-to-nearest, ties-to-even. When several
+decimal spellings have the same shortest length, choose the numerically closest
+one; an exact tie chooses the spelling whose final retained digit is even.
+Canonical zero is `0` for both binary64 zeros.
+
+Plain decimal notation is used when the adjusted base-10 exponent is from `-6`
+through `20` inclusive. Otherwise the encoder uses lowercase `e` scientific
+notation with one digit before the decimal point. Neither form has a leading
+plus, trailing fractional zeros, a trailing decimal point, exponent plus sign,
+or exponent leading zeros. The encoder implements this rule in-repository, or
+uses a Mojo standard formatter only after its specification and the complete
+boundary corpus prove the same grammar on every supported target.
+
+### XML text and identifiers
+
+Input must already be valid UTF-8. Allowed XML 1.0 scalar ranges are
+`U+0020...U+D7FF`, `U+E000...U+FFFD`, and `U+10000...U+10FFFF`; the line-breaking
+scalars `U+0085`, `U+2028`, and `U+2029` are additionally rejected by the
+single-line text contract. This intentionally also rejects tab, CR, LF,
+surrogates, `U+FFFE`, and `U+FFFF`. Text escapes `&`, `<`, and `>`; double-quoted
+attributes additionally escape `"`. Raw SVG/XML insertion is never accepted.
+
+Every definition ID has the form `sen-<digest>-<ordinal>`. `digest` is 16
+lowercase hexadecimal digits containing FNV-1a-64 over a versioned, ID-free
+canonical RenderPlan encoding. FNV starts at offset
+`0xcbf29ce484222325`, multiplies by prime `0x100000001b3` after each xor, and
+wraps modulo `2^64`. The encoding uses one-byte fixed command/style tags,
+big-endian normalized `Float64` bit patterns, big-endian unsigned 64-bit lengths,
+length-prefixed UTF-8, and resolved style fields in plan order. Both zeros use
+the positive-zero bits. `ordinal` starts at zero and advances in definition
+emission order. This keeps identifiers reproducible and reduces accidental
+cross-document collisions compared with a trivial global `clip0` namespace.
+The digest is an identity namespace, not a security primitive.
 
 Matplotlib's optional hash salt and date metadata demonstrate why
 reproducibility must be the default, not a build configuration. Plotters'
@@ -326,7 +409,8 @@ semantic lowering from encoding so future backends consume the same plan.
 
 The encoder serializes only the subset it emits. It does not accept raw SVG,
 CSS, scripts, event handlers, external URLs, or user-provided XML attributes in
-v0.1. That keeps escaping and security review finite.
+v0.1. It revalidates scalar and numeric input before emitting the first byte.
+That keeps escaping and security review finite.
 
 ## Akari gate
 
@@ -338,11 +422,15 @@ Sen may depend on Akari only after Akari publishes and tests:
 - stable scientific palette values and licensing provenance;
 - Mojo/compiler compatibility matching Sen's supported matrix.
 
-Before that gate, Sen uses private semantic color roles and a small private
-resolved sRGB representation solely for SVG. Neither becomes a public copied
-color API. When Akari is adopted, the migration occurs at style resolution;
-Figure/Axes/Series ownership, scales, layout, and render-plan ordering do not
-change.
+Before that gate, Sen uses private semantic color roles and a private
+`ResolvedColor`: four finite normalized straight-alpha `Float64` components
+with explicit sRGB transfer semantics. It is neither CSS text nor
+premultiplied storage, and it never becomes a public copied color API. SVG
+serializes that value. When Akari is adopted, style resolution produces the
+same explicit resolved contract through Akari; a Kagerou adapter uses Akari's
+defined sRGB-to-linear conversion before Kagerou premultiplication. Figure,
+Axes, and Series ownership, scales, layout, and render-plan geometry/order do
+not change.
 
 Sen does not absorb colormap generation, color management, or palette data.
 Those remain Akari's responsibility.
@@ -354,6 +442,7 @@ Kagerou is a post-v0.1 adapter. Work starts only when:
 - Sen's render-plan command semantics and clipping pass the SVG golden suite;
 - Kagerou's paths, transforms, strokes, fills, text decision, and surface
   lifetime are independently stable;
+- Akari's gate has replaced Sen's private pre-Akari color resolution;
 - the adapter can map commands without changing data, bounds, ticks, layout,
   color interpretation, or ownership;
 - CPU/SVG-only consumers do not initialize a native or GPU renderer.
@@ -362,6 +451,21 @@ Kagerou types never enter the Figure, Axes, Series, Scale, Tick, or Layout APIs.
 If Mojo packaging cannot express an optional dependency cleanly, the adapter
 belongs in a separate integration package rather than forcing Kagerou on every
 Sen installation.
+
+The integration location determines the plan-access contract:
+
+- A separate integration package requires Sen to publish an immutable,
+  versioned `sen.backend.RenderPlanView` and read-only command visitor after
+  v0.1. Version 1 exposes only completed validated plans and the six generic
+  primitive commands; it is documented integration API but is not re-exported
+  from the package root.
+- If Sen is not prepared to stabilize that view, the adapter remains in Sen and
+  consumes the internal plan. An external package may not reach into
+  underscore-prefixed modules or storage.
+
+The gate must choose one of these models before adapter code begins. It may not
+publish a mutable plan, a backend-generic Figure, or Sen marker/axis/legend
+commands merely to simplify the integration.
 
 ## Errors and reachable mutation
 
@@ -395,20 +499,24 @@ var figure = Figure()
 figure.add_line(line)
 ```
 
-The intended v0.1 endpoint adds only the primary Axes configuration and SVG
-entry point:
+The intended v0.1 endpoint adds the primary Axes configuration, one concrete
+scatter-series value, and the SVG entry point:
 
 ```mojo
-from sen import Axes, Figure, LineSeries, PlotPoint, render_svg
+from sen import Axes, Figure, LineSeries, PlotPoint, ScatterSeries, render_svg
 
 var line = LineSeries()
 line.append(PlotPoint(0.0, 1.0))
 line.append(PlotPoint(1.0, 3.0))
 
+var points = ScatterSeries()
+points.append(PlotPoint(0.5, 2.0))
+
 var axes = Axes()
 axes.set_x_label("time")
 axes.set_y_label("value")
 axes.add_line(line)
+axes.add_scatter(points)
 
 var figure = Figure()
 figure.set_axes(axes)
@@ -419,6 +527,8 @@ These are architectural target signatures, not implemented promises. API work
 must confirm current Mojo ownership and keyword syntax. `LinearScale`, tick
 locators, layout boxes, render plans, backend traits, SVG nodes, color storage,
 and Kagerou adapters stay out of the root unless direct user need is proven.
+`ScatterSeries` is concrete and follows the same owned finite-point contract;
+it does not open a general plot hierarchy.
 
 No implicit global current Figure/Axes exists. No `plot(x, y)` overload is
 added until two Mojo-native buffer adapters demonstrate a precise, non-copying
@@ -468,7 +578,8 @@ or explicitly copying contract without scientific-library dependencies.
 - empty, constant, positive, negative, reversed, tiny, and huge linear domains;
 - scale endpoints, monotonicity, extrapolation, and round trips;
 - deterministic tick values, label formatting, target-count edge cases, and
-  negative-zero elimination;
+  negative-zero elimination, including rejected counts outside 2 through 32 and
+  the 64-tick generation budget;
 - automatic bounds union, explicit overrides, hidden series, and constant-data
   expansion.
 
@@ -478,6 +589,10 @@ or explicitly copying contract without scientific-library dependencies.
 - finite, non-negative, non-overlapping required rectangles;
 - stable command order and balanced clip stack;
 - one path per explicit line segment, never across a gap;
+- marker, axis, tick, and legend lowering contains only generic fill/stroke path
+  or rectangle commands, never plot-specific backend commands;
+- exact top-left coordinate, path closure, fill rule, centered stroke,
+  cap/join/dash, text-anchor, and rectangle contracts through a fake backend;
 - all data commands clipped to the plot rectangle while axes/labels remain
   outside that clip;
 - a fake recording backend receives the same command stream as SVG encoding;
@@ -490,6 +605,15 @@ empty Axes, singleton/constant data, a segmented line, multiple series, reversed
 axes, tick labels, legend, clipping, and Unicode/XML-special labels. Tests
 assert exact bytes plus focused escaping, numeric-format, attribute-order, ID,
 and no-timestamp properties.
+
+The numeric corpus covers both zeros, every notation threshold, powers of ten,
+subnormals, minimum/maximum finite values, halfway neighbors, and a
+deterministically generated corpus of finite bit patterns with parse-back
+equality. XML tests cover every accepted boundary, rejected controls/line
+separators, context-specific escaping, malformed reachable storage, and exact
+Unicode-scalar metric counts. ID tests
+independently encode the versioned digest input and prove stable prefixes plus
+sequential ordinals without calling the production digest serializer.
 
 Snapshot updates include the command that generated them and a semantic reason
 for the change. A formatter or platform upgrade may not rewrite every fixture
@@ -532,21 +656,27 @@ this order and adds explicit exit criteria:
 2. **S1.2 Axis/Axes model.** Add x/y semantic specifications and primary-Axes
    Figure ownership while preserving `Figure.add_line` and owned copies.
 3. **S1.3 Linear ticks.** Implement deterministic location/formatting across
-   signs and magnitudes; freeze tie-break fixtures.
+   signs and magnitudes; freeze tie-break fixtures, the inclusive 2-through-32
+   target range, checked arithmetic, and the 64-tick output budget.
 4. **S1.4 View bounds.** Union visible series, apply overrides, and expand only
    automatic constant domains.
 5. **S2.1 Line style.** Add private resolved color roles and finite stroke/dash
    semantics without SVG, Akari, or Kagerou types.
-6. **S2.2 Scatter series.** Reuse point/bounds ownership; establish an internal
-   ordered series entry without exporting type erasure.
-7. **S2.3 Figure layout.** Produce exact backend-neutral logical boxes with a
-   deterministic text estimate and explicit insufficient-space errors.
+6. **S2.2 Scatter series.** Add the concrete root `ScatterSeries`, reuse
+   point/bounds ownership, and establish an internal ordered series entry
+   without exporting type erasure or an open plot protocol.
+7. **S2.3 Figure layout.** Produce exact backend-neutral logical boxes in the
+   locked top-left coordinate system, using single-line Unicode-scalar metrics
+   and explicit insufficient-space/control-scalar errors.
 8. **S2.4 Legend entries.** Derive stable label/sample semantics from visible
    ordered series.
-9. **S3.1 Render plan and backend conformance.** Lower validated figures to the
-   minimal ordered command set; add a recording backend and clip invariants.
-10. **S3.2 SVG encoder.** Serialize every required command with fixed escaping,
-    numeric, ordering, ID, and metadata rules.
+9. **S3.1 Render plan and backend conformance.** Lower every marker, axis, tick,
+   and legend sample to the six generic primitive commands with explicit path,
+   fill, stroke, clip, coordinate, and anchor semantics; add a recording backend
+   and clip invariants.
+10. **S3.2 SVG encoder.** Serialize every required command with the frozen
+    shortest-round-trip number grammar, XML-scalar validation/escaping,
+    versioned FNV-1a digest IDs, ordering, and metadata rules.
 11. **S3.3 SVG string API.** Export only the stable root rendering entry point;
     keep file I/O separate.
 12. **S3.4 Golden fixtures.** Lock exact compact documents across the supported
@@ -559,8 +689,10 @@ this order and adds explicit exit criteria:
     goldens on macOS ARM64, Linux x86-64, and Linux ARM64.
 16. **Evaluate Akari.** Pin only after its color gate passes; migrate private
     style resolution without changing plot semantics.
-17. **Evaluate Kagerou post-v0.1.** Add an isolated adapter only after both
-    render-plan and surface APIs stabilize.
+17. **Evaluate Kagerou post-v0.1.** Add an isolated adapter only after Akari,
+    render-plan, and surface APIs stabilize; publish immutable versioned
+    `sen.backend.RenderPlanView` for a separate package or keep the adapter in
+    Sen.
 
 No issue may combine a semantic layer with its renderer merely to produce an
 early screenshot. SVG is the proof that the layers compose, not the source of

@@ -31,7 +31,8 @@ the installed package; empty state and bounds behavior have invariant tests.
 - [ ] **S1.2 Axis model:** define orientation, domain, label, and scale ownership
   without pixel, SVG, or Kagerou types.
 - [ ] **S1.3 Tick locator:** generate deterministic human-readable linear ticks
-  for positive, negative, tiny, and large domains.
+  for positive, negative, tiny, and large domains with target counts from 2
+  through 32, checked arithmetic, and a 64-tick output budget.
 - [ ] **S1.4 View bounds:** combine visible series extents and explicit axis
   overrides, with reference fixtures for empty and constant data.
 
@@ -42,10 +43,12 @@ must use only Mojo standard-library values.
 
 - [ ] **S2.1 Line style:** add semantic stroke width, dash, marker, and color
   roles without importing backend geometry.
-- [ ] **S2.2 Scatter series:** add marker-only series sharing the S0 data and
-  missing-data contracts.
+- [ ] **S2.2 Scatter series:** export one concrete marker-only series sharing the
+  S0 data and missing-data contracts without an open plot protocol.
 - [ ] **S2.3 Figure layout:** compute title, plot-area, axes, and legend boxes in
-  backend-independent logical coordinates.
+  top-left, positive-y-down logical coordinates with deterministic single-line
+  Unicode-scalar text metrics and checked output dimensions from 1 through
+  `2^31 - 1`.
 - [ ] **S2.4 Legend entries:** derive stable labels and samples from visible
   series without rendering them.
 
@@ -55,10 +58,12 @@ color role or defers configurable colors; no copied color type becomes public.
 
 ### S3 — Deterministic SVG backend
 
-- [ ] **S3.1 Render plan:** lower a figure into a small ordered drawing-command
-  model that contains no file I/O.
-- [ ] **S3.2 SVG encoding:** encode lines, markers, axes, tick labels, clipping,
-  and legends with deterministic attribute ordering and numeric formatting.
+- [ ] **S3.1 Render plan:** lower all plot concepts to `FillRect`, `FillPath`,
+  `StrokePath`, `DrawText`, `PushRectClip`, and `PopClip`, with resolved generic
+  geometry/styles and no file I/O or backend-specific values.
+- [ ] **S3.2 SVG encoding:** encode the six generic commands with the frozen
+  number grammar, XML-scalar validation/escaping, content-digest IDs, and
+  deterministic element/attribute order.
 - [ ] **S3.3 String API:** return complete SVG as a `String`; keep saving to a
   path in an explicit I/O helper.
 - [ ] **S3.4 Golden fixtures:** snapshot compact plots and separately test XML
@@ -77,8 +82,10 @@ not require Kagerou and remains the portable reference backend.
   run deterministic SVG fixtures on every supported target.
 
 Kagerou gate: a native backend is a post-v0.1 adapter. It starts only after
-Sen's render plan and Kagerou's geometry/surface APIs are independently stable;
-neither project changes its core semantic model merely to fit the other.
+Akari, Sen's render plan, and Kagerou's geometry/surface/text APIs are
+independently stable. A separate integration package consumes an immutable,
+versioned `sen.backend.RenderPlanView`; otherwise the adapter remains inside
+Sen. Neither project changes its core semantic model merely to fit the other.
 
 ## v0.2 — Usability
 

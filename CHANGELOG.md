@@ -16,3 +16,6 @@ and uses semantic versioning after the first public release.
 
 - Revalidate reachable mutable numeric storage and require finite ordered bounds.
 - Revalidate externally reachable segment topology before reporting its count.
+- Harden the planned rendering boundary around six generic primitives,
+  deterministic text/SVG contracts, bounded ticks, and versioned future backend
+  integration.
