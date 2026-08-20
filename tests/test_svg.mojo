@@ -1,4 +1,13 @@
-from sen import Figure, LineSeries, Margins, MissingPolicy, PlotPoint, render_svg
+from sen import (
+    Figure,
+    LineSeries,
+    LineStyle,
+    Margins,
+    MissingPolicy,
+    PlotPoint,
+    SeriesStyle,
+    render_svg,
+)
 from sen.svg import _escape_xml, _format_decimal, _format_svg_number, _tick_label
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -70,6 +79,28 @@ def missing_segment_figure() raises -> Figure:
     return figure^
 
 
+def styled_series_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var first_y: List[Float64] = [0.0, 1.0, 0.0]
+    var second_y: List[Float64] = [1.0, 2.0, 1.0]
+    var third_y: List[Float64] = [2.0, 3.0, 2.0]
+    var marker_x: List[Float64] = [1.5]
+    var marker_y: List[Float64] = [1.5]
+
+    var dashed = SeriesStyle()
+    dashed = dashed.with_line_style(LineStyle.DASHED)
+    dashed = dashed.with_width(2.5)
+    var dotted = SeriesStyle(color_index=4)
+    dotted = dotted.with_line_style(LineStyle.DOTTED)
+
+    var figure = Figure()
+    figure.line(xs, first_y)
+    figure.line(xs, second_y, style=dashed)
+    figure.line(xs, third_y, style=dotted)
+    figure.scatter(marker_x, marker_y)
+    return figure^
+
+
 def read_fixture(path: StringSlice) raises -> String:
     with open(path, "r") as fixture:
         return fixture.read()
@@ -132,6 +163,12 @@ def test_missing_segment_golden_fixture_is_byte_exact() raises:
     assert_equal(actual, read_fixture("tests/fixtures/missing_segment.svg"))
 
 
+def test_styled_series_golden_fixture_is_byte_exact() raises:
+    var figure = styled_series_figure()
+    var actual = render_svg(figure, 160.0, 100.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/styled_series.svg"))
+
+
 def test_xml_escape_covers_predefined_entities_and_unicode() raises:
     assert_equal(
         _escape_xml("A&B <tag> \"quote\" 'apostrophe' 雪"),
@@ -164,7 +201,7 @@ def test_rendering_is_deterministic_and_flips_y_coordinates() raises:
     assert_equal(first, second)
     assert_equal(count_occurrences(first, "<polyline "), 1)
     assert_equal(
-        count_occurrences(first, 'points="24,60 68,8 112,60"'),
+        count_occurrences(first, 'points="28,57.636 68,10.364 108,57.636"'),
         1,
     )
     assert_true(first.endswith("</svg>\n"))
@@ -218,6 +255,63 @@ def test_lines_and_scatters_render_in_interleaved_insertion_order() raises:
     assert_true(first_line >= 0)
     assert_true(first_line < marker)
     assert_true(marker < second_line)
+
+
+def test_auto_colors_follow_interleaved_series_insertion_order() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.scatter(xs, ys)
+
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+    var blue = first_occurrence(svg, "#1f77b4")
+    var orange = first_occurrence(svg, "#ff7f0e")
+    assert_true(blue >= 0)
+    assert_true(blue < orange)
+
+
+def test_explicit_color_does_not_advance_auto_palette_counter() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.line(xs, ys, style=SeriesStyle(color_index=4))
+    figure.scatter(xs, ys)
+
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+    var blue = first_occurrence(svg, "#1f77b4")
+    var purple = first_occurrence(svg, "#9467bd")
+    var orange = first_occurrence(svg, "#ff7f0e")
+    assert_true(blue >= 0)
+    assert_true(blue < purple)
+    assert_true(purple < orange)
+
+
+def test_line_dasharrays_and_widths_use_fixed_svg_attributes() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var dashed = SeriesStyle()
+    dashed = dashed.with_line_style(LineStyle.DASHED)
+    var dotted = SeriesStyle()
+    dotted = dotted.with_line_style(LineStyle.DOTTED)
+    var dash_dot = SeriesStyle()
+    dash_dot = dash_dot.with_line_style(LineStyle.DASH_DOT)
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.line(xs, ys, style=dashed)
+    figure.line(xs, ys, style=dotted)
+    figure.line(xs, ys, style=dash_dot)
+
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+    assert_equal(count_occurrences(svg, "stroke-dasharray="), 3)
+    assert_equal(count_occurrences(svg, 'stroke-dasharray="6 3"'), 1)
+    assert_equal(count_occurrences(svg, 'stroke-dasharray="1.5 2.5"'), 1)
+    assert_equal(count_occurrences(svg, 'stroke-dasharray="6 3 1.5 3"'), 1)
+    assert_equal(
+        count_occurrences(svg, 'stroke="#1f77b4" stroke-width="1.5"/>'),
+        1,
+    )
 
 
 def test_title_and_axis_labels_are_escaped_and_use_fixed_geometry() raises:

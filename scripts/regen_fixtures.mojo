@@ -1,9 +1,11 @@
 from sen import (
     Figure,
     LineSeries,
+    LineStyle,
     Margins,
     MissingPolicy,
     PlotPoint,
+    SeriesStyle,
     render_svg,
     save_svg,
 )
@@ -76,6 +78,28 @@ def missing_segment_figure() raises -> Figure:
     return figure^
 
 
+def styled_series_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var first_y: List[Float64] = [0.0, 1.0, 0.0]
+    var second_y: List[Float64] = [1.0, 2.0, 1.0]
+    var third_y: List[Float64] = [2.0, 3.0, 2.0]
+    var marker_x: List[Float64] = [1.5]
+    var marker_y: List[Float64] = [1.5]
+
+    var dashed = SeriesStyle()
+    dashed = dashed.with_line_style(LineStyle.DASHED)
+    dashed = dashed.with_width(2.5)
+    var dotted = SeriesStyle(color_index=4)
+    dotted = dotted.with_line_style(LineStyle.DOTTED)
+
+    var figure = Figure()
+    figure.line(xs, first_y)
+    figure.line(xs, second_y, style=dashed)
+    figure.line(xs, third_y, style=dotted)
+    figure.scatter(marker_x, marker_y)
+    return figure^
+
+
 def main() raises:
     var margins = fixture_margins()
     var single = single_line_figure()
@@ -108,4 +132,9 @@ def main() raises:
         "tests/fixtures/missing_segment.svg",
         render_svg(missing, 120.0, 80.0, margins),
     )
-    print("Regenerated 6 SVG fixtures under tests/fixtures/.")
+    var styled = styled_series_figure()
+    save_svg(
+        "tests/fixtures/styled_series.svg",
+        render_svg(styled, 160.0, 100.0, margins),
+    )
+    print("Regenerated 7 SVG fixtures under tests/fixtures/.")

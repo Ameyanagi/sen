@@ -3,10 +3,76 @@
 from std.collections import List
 from std.math import ceil, isfinite
 
+from .series import DataBounds
+
 
 struct _Validated:
     def __init__(out self):
         pass
+
+
+struct StickyEdges(Copyable, Equatable, ImplicitlyCopyable):
+    """Bitflags selecting zero-valued data edges that autoscaling keeps fixed."""
+
+    var _value: Int
+
+    comptime NONE = StickyEdges(_value=0)
+    comptime X_ZERO_BASELINE = StickyEdges(_value=1)
+    comptime Y_ZERO_BASELINE = StickyEdges(_value=2)
+    comptime ALL_EDGES = StickyEdges(_value=3)
+
+    def __init__(out self, *, _value: Int):
+        """Construct sticky-edge bitflags for library-defined constants."""
+        self._value = _value
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return whether two sticky-edge values contain the same flags."""
+        return self._value == other._value
+
+    def __or__(self, other: Self) -> Self:
+        """Return the union of the flags in both values."""
+        return Self(_value=self._value | other._value)
+
+    def has(self, flag: Self) -> Bool:
+        """Return whether every bit in ``flag`` is present."""
+        return (self._value & flag._value) == flag._value
+
+
+def view_bounds(
+    data: DataBounds,
+    *,
+    margin: Float64 = 0.05,
+    sticky: StickyEdges = StickyEdges.NONE,
+) raises -> DataBounds:
+    """Return nondegenerate axes padded on each side by a span fraction.
+
+    ``margin`` defaults to 5 percent and raises when it is negative or
+    non-finite. An enabled zero-baseline flag prevents an original edge equal to
+    exactly zero from moving outward. Degenerate axes remain unchanged so the
+    renderer can apply its existing constant-domain fallback.
+    """
+    if not isfinite(margin) or margin < 0.0:
+        raise Error("view margin must be finite and non-negative; got ", margin)
+
+    var x_min = data.x_min()
+    var x_max = data.x_max()
+    if x_min != x_max:
+        var x_padding = margin * (x_max - x_min)
+        if not (sticky.has(StickyEdges.X_ZERO_BASELINE) and x_min == 0.0):
+            x_min -= x_padding
+        if not (sticky.has(StickyEdges.X_ZERO_BASELINE) and x_max == 0.0):
+            x_max += x_padding
+
+    var y_min = data.y_min()
+    var y_max = data.y_max()
+    if y_min != y_max:
+        var y_padding = margin * (y_max - y_min)
+        if not (sticky.has(StickyEdges.Y_ZERO_BASELINE) and y_min == 0.0):
+            y_min -= y_padding
+        if not (sticky.has(StickyEdges.Y_ZERO_BASELINE) and y_max == 0.0):
+            y_max += y_padding
+
+    return DataBounds(x_min, x_max, y_min, y_max)
 
 
 struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):

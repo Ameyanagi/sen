@@ -1,4 +1,4 @@
-from sen import LinearScale, linear_ticks
+from sen import DataBounds, LinearScale, StickyEdges, linear_ticks, view_bounds
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
@@ -88,6 +88,62 @@ def test_degenerate_range_maps_but_cannot_be_inverted() raises:
     assert_true(scale.map(0.5) == 4.0)
     with assert_raises(contains="degenerate linear scale range cannot be inverted"):
         _ = scale.invert(4.0)
+
+
+def test_sticky_edges_support_union_and_flag_queries() raises:
+    var combined = StickyEdges.X_ZERO_BASELINE | StickyEdges.Y_ZERO_BASELINE
+
+    assert_true(combined == StickyEdges.ALL_EDGES)
+    assert_true(combined.has(StickyEdges.X_ZERO_BASELINE))
+    assert_true(combined.has(StickyEdges.Y_ZERO_BASELINE))
+    assert_true(combined.has(StickyEdges.NONE))
+    assert_true(not StickyEdges.NONE.has(StickyEdges.X_ZERO_BASELINE))
+
+
+def test_view_bounds_applies_exact_fractional_padding() raises:
+    var padded = view_bounds(DataBounds(0.0, 10.0, -4.0, 6.0))
+
+    assert_true(padded.x_min() == -0.5)
+    assert_true(padded.x_max() == 10.5)
+    assert_true(padded.y_min() == -4.5)
+    assert_true(padded.y_max() == 6.5)
+
+
+def test_view_bounds_sticky_x_zero_preserves_baseline_edge() raises:
+    var padded = view_bounds(
+        DataBounds(0.0, 10.0, -4.0, 6.0),
+        sticky=StickyEdges.X_ZERO_BASELINE,
+    )
+
+    assert_true(padded.x_min() == 0.0)
+    assert_true(padded.x_max() == 10.5)
+    assert_true(padded.y_min() == -4.5)
+    assert_true(padded.y_max() == 6.5)
+
+
+def test_view_bounds_zero_margin_is_identity_and_degenerate_axes_stay_constant() raises:
+    var original = DataBounds(-2.0, 8.0, -3.0, 7.0)
+    var identity = view_bounds(original, margin=0.0)
+    assert_true(identity.x_min() == original.x_min())
+    assert_true(identity.x_max() == original.x_max())
+    assert_true(identity.y_min() == original.y_min())
+    assert_true(identity.y_max() == original.y_max())
+
+    var degenerate = view_bounds(DataBounds(2.0, 2.0, -4.0, -4.0))
+    assert_true(degenerate.x_min() == 2.0)
+    assert_true(degenerate.x_max() == 2.0)
+    assert_true(degenerate.y_min() == -4.0)
+    assert_true(degenerate.y_max() == -4.0)
+
+
+def test_view_bounds_rejects_negative_and_nonfinite_margins() raises:
+    var bounds = DataBounds(0.0, 1.0, 0.0, 1.0)
+    with assert_raises(contains="got -0.1"):
+        _ = view_bounds(bounds, margin=-0.1)
+    with assert_raises(contains="got inf"):
+        _ = view_bounds(bounds, margin=Float64("inf"))
+    with assert_raises(contains="got nan"):
+        _ = view_bounds(bounds, margin=Float64("nan"))
 
 
 def test_linear_ticks_unit_domain_fixture() raises:

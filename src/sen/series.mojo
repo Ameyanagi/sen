@@ -3,6 +3,8 @@
 from std.collections import List, Optional
 from std.math import isfinite
 
+from .style import SeriesStyle
+
 
 struct _Validated:
     def __init__(out self):
@@ -553,8 +555,10 @@ struct Figure(Copyable):
 
     var _lines: List[LineSeries]
     var _line_labels: List[String]
+    var _line_styles: List[SeriesStyle]
     var _scatters: List[ScatterSeries]
     var _scatter_labels: List[String]
+    var _scatter_styles: List[SeriesStyle]
     var _order: List[_SeriesOrder]
     var _title: String
     var _x_label: String
@@ -563,32 +567,45 @@ struct Figure(Copyable):
     def __init__(out self):
         self._lines = List[LineSeries]()
         self._line_labels = List[String]()
+        self._line_styles = List[SeriesStyle]()
         self._scatters = List[ScatterSeries]()
         self._scatter_labels = List[String]()
+        self._scatter_styles = List[SeriesStyle]()
         self._order = List[_SeriesOrder]()
         self._title = String()
         self._x_label = String()
         self._y_label = String()
 
-    def _insert_line(mut self, var line: LineSeries, var label: String):
+    def _insert_line(
+        mut self, var line: LineSeries, var label: String, style: SeriesStyle
+    ):
         var index = len(self._lines)
         self._lines.append(line^)
         self._line_labels.append(label^)
+        self._line_styles.append(style)
         self._order.append(_SeriesOrder(_SeriesKind.LINE, index))
 
-    def _insert_scatter(mut self, var scatter: ScatterSeries, var label: String):
+    def _insert_scatter(
+        mut self,
+        var scatter: ScatterSeries,
+        var label: String,
+        style: SeriesStyle,
+    ):
         var index = len(self._scatters)
         self._scatters.append(scatter^)
         self._scatter_labels.append(label^)
+        self._scatter_styles.append(style)
         self._order.append(_SeriesOrder(_SeriesKind.SCATTER, index))
 
-    def add_line(mut self, var line: LineSeries):
-        """Take ownership of a prebuilt line series with an empty label."""
-        self._insert_line(line^, String())
+    def add_line(mut self, var line: LineSeries, style: SeriesStyle = SeriesStyle()):
+        """Take ownership of a prebuilt line with an empty label and ``style``."""
+        self._insert_line(line^, String(), style)
 
-    def add_scatter(mut self, var scatter: ScatterSeries):
-        """Take ownership of a prebuilt scatter series with an empty label."""
-        self._insert_scatter(scatter^, String())
+    def add_scatter(
+        mut self, var scatter: ScatterSeries, style: SeriesStyle = SeriesStyle()
+    ):
+        """Take ownership of prebuilt markers with an empty label and ``style``."""
+        self._insert_scatter(scatter^, String(), style)
 
     def line(
         mut self,
@@ -596,11 +613,12 @@ struct Figure(Copyable):
         y: Span[Float64, ...],
         *,
         var label: String = String(),
+        style: SeriesStyle = SeriesStyle(),
         missing: MissingPolicy = MissingPolicy.ERROR,
     ) raises:
         """Build and insert a line series using the requested missing-data policy."""
         var series = LineSeries._from_xy_missing(x, y, missing)
-        self._insert_line(series^, label^)
+        self._insert_line(series^, label^, style)
 
     def scatter(
         mut self,
@@ -608,6 +626,7 @@ struct Figure(Copyable):
         y: Span[Float64, ...],
         *,
         var label: String = String(),
+        style: SeriesStyle = SeriesStyle(),
         missing: MissingPolicy = MissingPolicy.ERROR,
     ) raises:
         """Build and insert markers using the requested missing-data policy.
@@ -616,7 +635,7 @@ struct Figure(Copyable):
         behaves identically to ``DROP``. ``ERROR`` still rejects the first NaN.
         """
         var series = ScatterSeries._from_xy_missing(x, y, missing)
-        self._insert_scatter(series^, label^)
+        self._insert_scatter(series^, label^, style)
 
     def set_title(mut self, var title: String):
         """Set arbitrary title text; no input validation is required."""
@@ -645,10 +664,18 @@ struct Figure(Copyable):
             self._lines[index].validate()
         for index in range(len(self._scatters)):
             self._scatters[index].validate()
+        for index in range(len(self._line_styles)):
+            self._line_styles[index].validate()
+        for index in range(len(self._scatter_styles)):
+            self._scatter_styles[index].validate()
         if len(self._line_labels) != len(self._lines):
             raise Error("figure line labels must match stored line series")
+        if len(self._line_styles) != len(self._lines):
+            raise Error("figure line styles must match stored line series")
         if len(self._scatter_labels) != len(self._scatters):
             raise Error("figure scatter labels must match stored scatter series")
+        if len(self._scatter_styles) != len(self._scatters):
+            raise Error("figure scatter styles must match stored scatter series")
         if len(self._order) != len(self._lines) + len(self._scatters):
             raise Error("figure series order must include every stored series")
 
@@ -757,6 +784,12 @@ struct Figure(Copyable):
 
     def _series_index(self, index: Int) -> Int:
         return self._order[index].index
+
+    def _series_style(self, index: Int) -> SeriesStyle:
+        ref entry = self._order[index]
+        if entry.kind._value == _SeriesKind.LINE._value:
+            return self._line_styles[entry.index]
+        return self._scatter_styles[entry.index]
 
     def save_svg(self, path: StringSlice) raises:
         """Render at 640 by 480 with default margins and save to ``path``."""

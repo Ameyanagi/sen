@@ -4,8 +4,9 @@ from std.collections import List
 from std.math import floor, isfinite
 
 from .layout import Margins, plot_area
-from .scale import LinearScale, linear_ticks
+from .scale import LinearScale, linear_ticks, view_bounds
 from .series import Figure
+from .style import LineStyle, _palette_color
 
 
 struct _CommandKind(Copyable, ImplicitlyCopyable):
@@ -44,6 +45,9 @@ struct _DrawCommand:
     var y2: Float64
     var points: List[_PlanPoint]
     var text: String
+    var color: String
+    var line_width: Float64
+    var line_style: LineStyle
 
     def __init__(
         out self,
@@ -54,6 +58,9 @@ struct _DrawCommand:
         y2: Float64,
         var points: List[_PlanPoint],
         var text: String,
+        var color: String,
+        line_width: Float64,
+        line_style: LineStyle,
     ):
         self.kind = kind
         self.x1 = x1
@@ -62,6 +69,9 @@ struct _DrawCommand:
         self.y2 = y2
         self.points = points^
         self.text = text^
+        self.color = color^
+        self.line_width = line_width
+        self.line_style = line_style
 
 
 struct _RenderPlan:
@@ -99,6 +109,9 @@ def _shape_command(
         y2,
         _empty_points(),
         String(),
+        String(),
+        0.0,
+        LineStyle.SOLID,
     )
 
 
@@ -113,10 +126,18 @@ def _text_command(
         0.0,
         _empty_points(),
         text^,
+        String(),
+        0.0,
+        LineStyle.SOLID,
     )
 
 
-def _polyline_command(var points: List[_PlanPoint]) -> _DrawCommand:
+def _polyline_command(
+    var points: List[_PlanPoint],
+    color: StringSlice,
+    line_width: Float64,
+    line_style: LineStyle,
+) -> _DrawCommand:
     return _DrawCommand(
         _CommandKind.SERIES,
         0.0,
@@ -125,10 +146,13 @@ def _polyline_command(var points: List[_PlanPoint]) -> _DrawCommand:
         0.0,
         points^,
         String(),
+        String(color),
+        line_width,
+        line_style,
     )
 
 
-def _marker_command(x: Float64, y: Float64) -> _DrawCommand:
+def _marker_command(x: Float64, y: Float64, color: StringSlice) -> _DrawCommand:
     return _DrawCommand(
         _CommandKind.MARKER,
         x,
@@ -137,6 +161,9 @@ def _marker_command(x: Float64, y: Float64) -> _DrawCommand:
         0.0,
         _empty_points(),
         String(),
+        String(color),
+        0.0,
+        LineStyle.SOLID,
     )
 
 
@@ -275,7 +302,7 @@ def _lower_figure(
         margins.bottom() + extra_bottom,
     )
     var area = plot_area(width, height, effective_margins)
-    var bounds = figure.bounds()
+    var bounds = view_bounds(figure.bounds(), margin=0.05)
     var x_domain = _padded_domain(bounds.x_min(), bounds.x_max(), "x")
     var y_domain = _padded_domain(bounds.y_min(), bounds.y_max(), "y")
     var x_scale = LinearScale(
@@ -385,8 +412,15 @@ def _lower_figure(
             )
         )
 
+    var auto_color_index = 0
     for order_index in range(figure._series_count()):
         var series_index = figure._series_index(order_index)
+        var style = figure._series_style(order_index)
+        var palette_slot = style.palette_slot()
+        if palette_slot == -1:
+            palette_slot = auto_color_index % 6
+            auto_color_index += 1
+        var color = _palette_color(palette_slot)
         if figure._series_is_line(order_index):
             ref line = figure.line(series_index)
             for segment_index in range(line.segment_count()):
@@ -396,7 +430,14 @@ def _lower_figure(
                     points.append(
                         _PlanPoint(x_scale.map(point.x()), y_scale.map(point.y()))
                     )
-                commands.append(_polyline_command(points^))
+                commands.append(
+                    _polyline_command(
+                        points^,
+                        color,
+                        style.line_width(),
+                        style.line_style(),
+                    )
+                )
         else:
             ref scatter = figure.scatter(series_index)
             for point_index in range(scatter.point_count()):
@@ -405,6 +446,7 @@ def _lower_figure(
                     _marker_command(
                         x_scale.map(point.x()),
                         y_scale.map(point.y()),
+                        color,
                     )
                 )
     return _RenderPlan(width, height, commands^)
@@ -491,7 +533,18 @@ def _append_polyline(mut svg: String, command: _DrawCommand) raises:
         svg += _format_svg_number(command.points[index].x)
         svg += ","
         svg += _format_svg_number(command.points[index].y)
-    svg += '" fill="none" stroke="#2563eb" stroke-width="1.5"/>\n'
+    svg += '" fill="none" stroke="'
+    svg += command.color
+    svg += '" stroke-width="'
+    svg += _format_svg_number(command.line_width)
+    svg += '"'
+    if command.line_style == LineStyle.DASHED:
+        svg += ' stroke-dasharray="6 3"'
+    elif command.line_style == LineStyle.DOTTED:
+        svg += ' stroke-dasharray="1.5 2.5"'
+    elif command.line_style == LineStyle.DASH_DOT:
+        svg += ' stroke-dasharray="6 3 1.5 3"'
+    svg += "/>\n"
 
 
 def _append_marker(mut svg: String, command: _DrawCommand) raises:
@@ -499,7 +552,9 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
     svg += _format_svg_number(command.x1)
     svg += '" cy="'
     svg += _format_svg_number(command.y1)
-    svg += '" r="2.5" fill="#2563eb"/>\n'
+    svg += '" r="2.5" fill="'
+    svg += command.color
+    svg += '"/>\n'
 
 
 def _encode_svg(plan: _RenderPlan) raises -> String:
@@ -548,9 +603,12 @@ def render_svg(
 ) raises -> String:
     """Render ``figure`` to a complete deterministic SVG document.
 
-    Empty figures are rejected. Each constant axis is padded by the larger of
+    Empty figures are rejected. Nonconstant data bounds receive a five-percent
+    margin on each side; each remaining constant axis is padded by the larger of
     0.5 or five percent of the constant's magnitude before ticks and scales are
-    built. A nonempty title adds a fixed 18-unit top band to ``margins``;
+    built. Automatic palette slots are resolved while walking insertion order;
+    only automatic series advance the counter, which starts at zero and cycles
+    modulo six. A nonempty title adds a fixed 18-unit top band to ``margins``;
     nonempty x- and y-axis labels add fixed 14-unit bottom and left bands.
     Geometry uses fixed-point formatting with at most three fractional digits,
     half-away-from-zero rounding, stripped trailing zeros, normalized negative
