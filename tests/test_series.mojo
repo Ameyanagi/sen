@@ -296,13 +296,29 @@ def test_line_series_validate_checks_every_topology_boundary() raises:
         out_of_range.validate()
 
 
-def test_figure_rejects_corrupted_series() raises:
+def test_figure_validate_rejects_corrupted_series() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))
     line._xs[0] = Float64("nan")
     var figure = Figure()
+    figure.add_line(line^)
     with assert_raises(contains="plot coordinates must be finite"):
-        figure.add_line(line)
+        figure.validate()
+
+
+def test_figure_add_line_moves_series() raises:
+    var series = LineSeries()
+    series.append(PlotPoint(0.0, 1.0))
+    series.append(PlotPoint(2.0, 3.0))
+    var figure = Figure()
+
+    figure.add_line(series^)
+
+    assert_equal(figure.line_count(), 1)
+    ref stored = figure.line(0)
+    assert_equal(stored.point_count(), 2)
+    assert_true(stored.point(0).x() == 0.0)
+    assert_true(stored.point(1).y() == 3.0)
 
 
 def test_figure_owns_renderer_neutral_series() raises:
@@ -310,29 +326,42 @@ def test_figure_owns_renderer_neutral_series() raises:
     line.append(PlotPoint(0.0, 1.0))
     var figure = Figure()
     assert_true(figure.is_empty())
-    figure.add_line(line)
+    figure.add_line(line.copy())
     line.append(PlotPoint(2.0, 3.0))
     assert_false(figure.is_empty())
     assert_equal(figure.line_count(), 1)
     assert_equal(figure.line(0).point_count(), 1)
 
 
+def test_figure_line_returns_read_reference() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(-1.0, 4.0))
+    var figure = Figure()
+    figure.add_line(line^)
+
+    # A ref binding preserves the accessor's borrowed result instead of copying it.
+    ref stored = figure.line(0)
+    assert_equal(stored.point_count(), 1)
+    assert_true(stored.point(0).x() == -1.0)
+    assert_true(stored.point(0).y() == 4.0)
+
+
 def test_figure_validate_reports_post_insertion_storage_corruption() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))
     var figure = Figure()
-    figure.add_line(line)
+    figure.add_line(line^)
     figure._lines[0]._xs[0] = Float64("nan")
     with assert_raises(contains="plot coordinates must be finite"):
         figure.validate()
 
 
-def test_mutating_returned_line_copy_does_not_change_figure() raises:
+def test_mutating_explicit_line_copy_does_not_change_figure() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))
     var figure = Figure()
-    figure.add_line(line)
-    var returned = figure.line(0)
+    figure.add_line(line^)
+    var returned = figure.line(0).copy()
     returned.append(PlotPoint(2.0, 3.0))
     assert_equal(returned.point_count(), 2)
     assert_equal(figure.line(0).point_count(), 1)

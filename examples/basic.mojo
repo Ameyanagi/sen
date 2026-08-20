@@ -8,6 +8,6 @@ def main() raises:
     # A missing observation breaks the line; its NaN is never stored.
     line.start_segment(PlotPoint(2.0, 2.0))
     var figure = Figure()
-    figure.add_line(line)
+    figure.add_line(line^)
     print("figure line series:", figure.line_count())
     print("connected segments:", figure.line(0).segment_count())

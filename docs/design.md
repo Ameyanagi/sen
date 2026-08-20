@@ -28,6 +28,11 @@ failure case. Direct mutation of underscore-prefixed storage is out of contract,
 with one public `validate()` checkpoint per validated type for unusual low-level
 use.
 
+`Figure.add_line()` takes ownership of a constructed `LineSeries` and moves it
+into ordered figure storage without copying or revalidating it. The figure trusts
+the series' construction-time invariants; `Figure.validate()` remains the explicit
+checkpoint after unusual low-level mutation.
+
 ## Missing data
 
 Line gaps are topology, not numeric coordinates. `LineSeries.start_segment()`

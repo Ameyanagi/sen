@@ -325,9 +325,10 @@ struct LineSeries(Copyable):
 struct Figure(Copyable):
     """A renderer-neutral ordered collection of line series.
 
-    Inserted series are validated and public operations trust them thereafter.
-    Direct mutation of underscore-prefixed storage is out of contract; call
-    ``validate`` explicitly when a checkpoint is needed.
+    ``add_line`` takes ownership of each inserted series without copying it.
+    Constructed series are trusted on insertion and public operations trust them
+    thereafter. Direct mutation of underscore-prefixed storage is out of contract;
+    call ``validate`` explicitly when a checkpoint is needed.
     """
 
     var _lines: List[LineSeries]
@@ -335,9 +336,8 @@ struct Figure(Copyable):
     def __init__(out self):
         self._lines = List[LineSeries]()
 
-    def add_line(mut self, line: LineSeries) raises:
-        line.validate()
-        self._lines.append(line.copy())
+    def add_line(mut self, var line: LineSeries):
+        self._lines.append(line^)
 
     def validate(self) raises:
         """Validate every stored line series explicitly."""
@@ -350,8 +350,8 @@ struct Figure(Copyable):
     def line_count(self) -> Int:
         return len(self._lines)
 
-    def line(self, index: Int) raises -> LineSeries:
-        """Return an owned copy of a line series by position."""
+    def line(self, index: Int) raises -> ref[self._lines[index]] LineSeries:
+        """Return a read reference to a line series by position."""
         if index < 0 or index >= len(self._lines):
             raise Error("figure line index is out of bounds")
-        return self._lines[index].copy()
+        return self._lines[index]
