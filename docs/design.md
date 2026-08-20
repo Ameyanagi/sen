@@ -36,6 +36,12 @@ makes leading, repeated, and trailing gap markers unrepresentable, preserves
 the global order of valid observations, and keeps missing samples out of data
 bounds. NaN remains invalid rather than acquiring context-dependent meaning.
 
+`LineSeries` stores coordinates in parallel `Float64` buffers while preserving
+`PlotPoint` at the pointwise API boundary. `from_xy()` is the bulk fast path,
+validating borrowed coordinate spans while filling owned buffers in one pass;
+`append_all()` validates a complete batch before mutation. Bulk reads such as
+bounds operate directly on the coordinate buffers.
+
 ## Out of scope
 
 Signal processing, interpolation, optimization, dataframes, native windowing, and a bundled low-level renderer are outside the core plotting package.

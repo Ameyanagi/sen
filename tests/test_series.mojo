@@ -32,6 +32,70 @@ def test_line_series_preserves_order_and_computes_bounds() raises:
     assert_true(bounds.y_max() == 3.0)
 
 
+def test_line_series_from_xy_preserves_order_and_computes_bounds() raises:
+    var xs: List[Float64] = [4.0, -1.0, 2.0]
+    var ys: List[Float64] = [-2.0, 3.0, 1.0]
+    var line = LineSeries.from_xy(xs, ys)
+
+    assert_equal(line.point_count(), 3)
+    assert_equal(line.segment_count(), 1)
+    assert_true(line.point(0).x() == 4.0)
+    assert_true(line.point(1).y() == 3.0)
+    var bounds = line.bounds()
+    assert_true(bounds.x_min() == -1.0)
+    assert_true(bounds.x_max() == 4.0)
+    assert_true(bounds.y_min() == -2.0)
+    assert_true(bounds.y_max() == 3.0)
+
+
+def test_line_series_from_xy_rejects_invalid_inputs() raises:
+    var two_values: List[Float64] = [0.0, 1.0]
+    var one_value: List[Float64] = [0.0]
+    with assert_raises(contains="coordinate sequences must have equal length"):
+        _ = LineSeries.from_xy(two_values, one_value)
+
+    var finite: List[Float64] = [0.0, 1.0]
+    var nan_values: List[Float64] = [0.0, Float64("nan")]
+    with assert_raises(contains="plot coordinates must be finite"):
+        _ = LineSeries.from_xy(nan_values, finite)
+
+    var infinite_values: List[Float64] = [0.0, Float64("inf")]
+    with assert_raises(contains="plot coordinates must be finite"):
+        _ = LineSeries.from_xy(finite, infinite_values)
+
+
+def test_append_all_is_all_or_nothing_on_invalid_input() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 1.0))
+    var xs: List[Float64] = [2.0, Float64("nan")]
+    var ys: List[Float64] = [3.0, 4.0]
+
+    with assert_raises(contains="plot coordinates must be finite"):
+        line.append_all(xs, ys)
+
+    assert_equal(line.point_count(), 1)
+    assert_equal(line.segment_count(), 1)
+    assert_true(line.point(0).x() == 0.0)
+    assert_true(line.point(0).y() == 1.0)
+
+
+def test_append_all_extends_the_last_existing_segment() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 1.0))
+    line.start_segment(PlotPoint(2.0, 3.0))
+    var xs: List[Float64] = [4.0, 5.0]
+    var ys: List[Float64] = [6.0, 7.0]
+
+    line.append_all(xs, ys)
+
+    assert_equal(line.point_count(), 4)
+    assert_equal(line.segment_count(), 2)
+    assert_equal(line.segment_point_count(0), 1)
+    assert_equal(line.segment_point_count(1), 3)
+    assert_true(line.segment_point(1, 1).x() == 4.0)
+    assert_true(line.segment_point(1, 2).y() == 7.0)
+
+
 def test_single_point_bounds_equal_the_point() raises:
     var line = LineSeries()
     line.append(PlotPoint(2.5, -4.0))
@@ -150,9 +214,14 @@ def test_explicit_validation_reports_mutated_storage() raises:
     var points = List[PlotPoint]()
     points.append(PlotPoint(0.0, 1.0))
     var line = LineSeries(points^)
-    line._points[0]._y = Float64("inf")
+    line._ys[0] = Float64("inf")
     with assert_raises(contains="plot coordinates must be finite"):
         line.validate()
+
+    var mismatched = LineSeries()
+    mismatched._xs.append(0.0)
+    with assert_raises(contains="coordinate buffers must have equal length"):
+        mismatched.validate()
 
     var segmented = LineSeries()
     segmented.append(PlotPoint(0.0, 1.0))
@@ -230,7 +299,7 @@ def test_line_series_validate_checks_every_topology_boundary() raises:
 def test_figure_rejects_corrupted_series() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))
-    line._points[0]._x = Float64("nan")
+    line._xs[0] = Float64("nan")
     var figure = Figure()
     with assert_raises(contains="plot coordinates must be finite"):
         figure.add_line(line)
@@ -253,7 +322,7 @@ def test_figure_validate_reports_post_insertion_storage_corruption() raises:
     line.append(PlotPoint(0.0, 1.0))
     var figure = Figure()
     figure.add_line(line)
-    figure._lines[0]._points[0]._x = Float64("nan")
+    figure._lines[0]._xs[0] = Float64("nan")
     with assert_raises(contains="plot coordinates must be finite"):
         figure.validate()
 
