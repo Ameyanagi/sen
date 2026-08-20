@@ -5,17 +5,17 @@ Milestones advance only through the explicit gates below; the semantic model
 must remain usable without any renderer.
 
 Routine `pixi run check` covers formatting, tests, and `.mojoc` precompilation.
-`pixi run package` builds and tests the installed artifact separately as a
-manual/release gate; it is not part of the routine CI task until S4.3 lands.
+`pixi run package` builds and tests the installed artifact in the Linux CI
+package job and remains available as a local release gate.
 
 ## v0.1 — Foundation
 
 ### S0 — Renderer-neutral series model
 
-- [x] **S0.1 Finite data points:** validate construction and revalidate public
-  observation after reachable Mojo 1.0 storage mutation.
+- [x] **S0.1 Finite data points:** validate construction and mutation inputs,
+  trust established invariants on reads, and expose an explicit checkpoint.
 - [x] **S0.2 Line-series bounds:** preserve point order, validate finite ordered
-  `DataBounds`, and reject mutated nonfinite/reversed state before observation.
+  `DataBounds`, and compute trusted extents in one pass.
 - [x] **S0.3 Figure seed:** own an ordered collection of line series without
   backend, color, filesystem, or scientific-algorithm dependencies.
 - [x] **S0.4 Missing-data policy:** represent gaps as explicit segment starts;

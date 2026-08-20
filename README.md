@@ -27,8 +27,8 @@ pixi run example
 ```
 
 `pixi run check` covers formatting, tests, and package precompilation. The
-installed-package smoke test runs separately through `pixi run package` as a
-release gate.
+installed-package smoke test runs separately through `pixi run package` in the
+Linux CI package job and as a local release gate.
 
 The exact stable Mojo compiler and all development dependencies are captured in
 `pixi.lock`. Runtime and library code is Mojo-first and pure Mojo wherever
@@ -44,12 +44,13 @@ The Mojo import is `sen`. The eventual Conda distribution is
 
 The first public slice is deliberately renderer-neutral: constructor-validated
 `PlotPoint` values, ordered and explicitly segmented `LineSeries` data with
-validated optional bounds, and a `Figure` that owns line-series semantics
-without SVG, native-window, or Akari coupling. Missing observations start a new
-segment at the next finite point; NaN is never stored as a sentinel. Because
-Mojo 1.0 struct storage remains externally mutable, semantic accessors and
-operations revalidate current points, segment boundaries, bounds, and series
-before returning them.
+validated bounds for nonempty series, and a `Figure` that owns line-series
+semantics without SVG, native-window, or Akari coupling. Missing observations
+start a new segment at the next finite point; NaN is never stored as a sentinel.
+Because Mojo 1.0 struct storage remains externally mutable, mutation of
+underscore-prefixed fields is out of contract. Constructors and public mutators
+validate their inputs, reads trust established invariants, and each semantic
+type provides an explicit `validate()` checkpoint for unusual low-level use.
 
 ```mojo
 from sen import Figure, LineSeries, PlotPoint

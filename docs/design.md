@@ -21,6 +21,13 @@ contracts and sparse dependencies. Generated tables are acceptable when their
 sources, Unicode or data version, licenses, checksums, and deterministic update
 procedure are committed. Consumers must not need the generator toolchain.
 
+Validated semantic values establish their invariants at construction. Mutators
+validate new inputs and only the local invariant they change; read-only methods
+trust stored state and stay non-raising unless the operation has a genuine
+failure case. Direct mutation of underscore-prefixed storage is out of contract,
+with one public `validate()` checkpoint per validated type for unusual low-level
+use.
+
 ## Missing data
 
 Line gaps are topology, not numeric coordinates. `LineSeries.start_segment()`

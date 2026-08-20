@@ -14,5 +14,8 @@ and uses semantic versioning after the first public release.
 
 ### Changed
 
-- Revalidate reachable mutable numeric storage and require finite ordered bounds.
-- Revalidate externally reachable segment topology before reporting its count.
+- Validate series invariants at construction and mutation, trust them on reads,
+  and provide explicit `validate()` checkpoints for unusual low-level mutation.
+- Make `LineSeries.bounds()` return `DataBounds` directly and reject empty series.
+- Compute line-series bounds in one pass without constructing intermediate
+  validated bounds values.
