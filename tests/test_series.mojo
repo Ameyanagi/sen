@@ -119,11 +119,13 @@ def test_semantic_operations_revalidate_mutated_storage() raises:
     segmented.append(PlotPoint(0.0, 1.0))
     segmented.start_segment(PlotPoint(2.0, 3.0))
     segmented._segment_starts[1] = 0
-    with assert_raises(contains="segment starts must be ordered points"):
+    with assert_raises(contains="segment starts must be strictly increasing"):
+        _ = segmented.segment_count()
+    with assert_raises(contains="segment starts must be strictly increasing"):
         _ = segmented.segment_point_count(0)
-    with assert_raises(contains="segment starts must be ordered points"):
+    with assert_raises(contains="segment starts must be strictly increasing"):
         _ = segmented.bounds()
-    with assert_raises(contains="segment starts must be ordered points"):
+    with assert_raises(contains="segment starts must be strictly increasing"):
         segmented.append(PlotPoint(4.0, 5.0))
 
     var bounds = DataBounds(0.0, 1.0, 0.0, 1.0)
@@ -132,6 +134,49 @@ def test_semantic_operations_revalidate_mutated_storage() raises:
         _ = bounds.x_min()
     with assert_raises(contains="x minimum must not exceed"):
         _ = bounds.including(PlotPoint(3.0, 3.0))
+
+
+def test_segment_count_revalidates_every_topology_boundary() raises:
+    var empty = LineSeries()
+    empty._segment_starts.append(0)
+    with assert_raises(contains="empty line-series must not contain segments"):
+        _ = empty.segment_count()
+
+    var missing_first = LineSeries()
+    missing_first.append(PlotPoint(0.0, 0.0))
+    missing_first._segment_starts = List[Int]()
+    with assert_raises(contains="nonempty line-series must start with segment zero"):
+        _ = missing_first.segment_count()
+
+    var wrong_first = LineSeries()
+    wrong_first.append(PlotPoint(0.0, 0.0))
+    wrong_first.append(PlotPoint(1.0, 1.0))
+    wrong_first._segment_starts[0] = 1
+    with assert_raises(contains="nonempty line-series must start with segment zero"):
+        _ = wrong_first.segment_count()
+
+    var duplicate = LineSeries()
+    duplicate.append(PlotPoint(0.0, 0.0))
+    duplicate.start_segment(PlotPoint(1.0, 1.0))
+    duplicate._segment_starts[1] = 0
+    with assert_raises(contains="segment starts must be strictly increasing"):
+        _ = duplicate.segment_count()
+
+    var out_of_order = LineSeries()
+    out_of_order.append(PlotPoint(0.0, 0.0))
+    out_of_order.append(PlotPoint(1.0, 1.0))
+    out_of_order.start_segment(PlotPoint(2.0, 2.0))
+    out_of_order.start_segment(PlotPoint(3.0, 3.0))
+    out_of_order._segment_starts[2] = 1
+    with assert_raises(contains="segment starts must be strictly increasing"):
+        _ = out_of_order.segment_count()
+
+    var out_of_range = LineSeries()
+    out_of_range.append(PlotPoint(0.0, 0.0))
+    out_of_range.start_segment(PlotPoint(1.0, 1.0))
+    out_of_range._segment_starts[1] = out_of_range.point_count()
+    with assert_raises(contains="segment start is outside point storage"):
+        _ = out_of_range.segment_count()
 
 
 def test_figure_rejects_corrupted_series() raises:

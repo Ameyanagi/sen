@@ -137,8 +137,10 @@ struct LineSeries(Copyable):
         var previous = -1
         for index in range(len(self._segment_starts)):
             var start = self._segment_starts[index]
-            if start <= previous or start >= len(self._points):
-                raise Error("line-series segment starts must be ordered points")
+            if start <= previous:
+                raise Error("line-series segment starts must be strictly increasing")
+            if start >= len(self._points):
+                raise Error("line-series segment start is outside point storage")
             previous = start
 
     def append(mut self, point: PlotPoint) raises:
@@ -164,7 +166,9 @@ struct LineSeries(Copyable):
     def point_count(self) -> Int:
         return len(self._points)
 
-    def segment_count(self) -> Int:
+    def segment_count(self) raises -> Int:
+        """Return the connected-segment count after validating current topology."""
+        self._validate()
         return len(self._segment_starts)
 
     def point(self, index: Int) raises -> PlotPoint:
