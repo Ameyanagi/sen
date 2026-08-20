@@ -1,5 +1,11 @@
-from sen._scaffold import scaffold_name
+from sen import Figure, LineSeries, PlotPoint
 
 
-def main():
-    print(scaffold_name(), "is an experimental scaffold; no API is released yet.")
+def main() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 1.0))
+    line.append(PlotPoint(1.0, 3.0))
+    line.append(PlotPoint(2.0, 2.0))
+    var figure = Figure()
+    figure.add_line(line)
+    print("figure line series:", figure.line_count())

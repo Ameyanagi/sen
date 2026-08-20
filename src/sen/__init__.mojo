@@ -1,1 +1,3 @@
-# Public exports will be added with the first implemented and tested API.
+"""Renderer-independent scientific plotting semantics for Mojo."""
+
+from .series import DataBounds, Figure, LineSeries, PlotPoint

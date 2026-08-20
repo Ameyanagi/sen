@@ -28,3 +28,8 @@ explicit typed values, produce deterministic outputs for deterministic inputs,
 and report invalid state rather than silently replacing it with a default.
 I/O, clocks, randomness, terminal queries, filesystem access, and accelerator
 selection stay at explicit effect or backend boundaries.
+
+Mojo 1.0 does not make underscore-prefixed struct fields private. Constructors
+validate semantic values, and every public accessor or operation that observes
+numeric content revalidates reachable storage. Collection counts and emptiness
+may remain non-raising because they do not expose or compute from numeric state.

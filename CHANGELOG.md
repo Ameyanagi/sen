@@ -8,3 +8,8 @@ and uses semantic versioning after the first public release.
 ### Added
 
 - Initial experimental repository scaffold.
+- Renderer-neutral plot points, line series, data bounds, and figures.
+
+### Changed
+
+- Revalidate reachable mutable numeric storage and require finite ordered bounds.

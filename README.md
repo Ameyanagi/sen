@@ -1,14 +1,18 @@
 # Sen
 
-> **Experimental — API not yet released.**
+> **Experimental — API may change before v1.0.**
 
 Scientific plotting for Mojo.
 
 ## Scope
 
-Sen owns plotting semantics independently of data-production libraries and begins with a deterministic SVG backend.
+Sen owns plotting semantics independently of data-production libraries. The
+current slice establishes renderer-neutral figure and series contracts before
+adding a deterministic SVG backend.
 
-The first implementation milestone is intentionally narrow: implement figures, axes, linear scales, ticks, legends, line and scatter plots, and SVG output using Akari colors.
+The v0.1 plan proceeds through figures, axes, linear scales, ticks, legends,
+line/scatter plots, and SVG output. Akari color integration remains deferred
+until Akari's numeric and color-space contracts pass their documented gate.
 The project is independently installable and does not require any application
 from the wider ecosystem.
 
@@ -22,6 +26,10 @@ pixi run check
 pixi run example
 ```
 
+`pixi run check` covers formatting, tests, and package precompilation. The
+installed-package smoke test runs separately through `pixi run package` as a
+release gate.
+
 The exact stable Mojo compiler and all development dependencies are captured in
 `pixi.lock`. Runtime and library code is Mojo-first and pure Mojo wherever
 practical. Build-time data generation may use another language when justified,
@@ -34,8 +42,21 @@ The Mojo import is `sen`. The eventual Conda distribution is
 `mojo-sen`. Source lives under `src/sen/`, whose
 `__init__.mojo` defines the package boundary.
 
-The current scaffold includes only an internal smoke marker. Nothing is
-re-exported as a stable public API yet.
+The first public slice is deliberately renderer-neutral: constructor-validated
+`PlotPoint` values, ordered `LineSeries` data with validated optional bounds, and
+a `Figure` that owns line-series semantics without SVG, native-window, or Akari
+coupling. Because Mojo 1.0 struct storage remains externally mutable, semantic
+accessors and operations revalidate current points, bounds, and series before
+returning them.
+
+```mojo
+from sen import Figure, LineSeries, PlotPoint
+
+var line = LineSeries()
+line.append(PlotPoint(0.0, 1.0))
+var figure = Figure()
+figure.add_line(line)
+```
 
 ## Repository map
 
