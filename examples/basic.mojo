@@ -1,4 +1,5 @@
-from sen import Figure, LineSeries, PlotPoint
+from sen import Figure, LineSeries, PlotPoint, render_svg, save_svg
+from std.os import makedirs
 
 
 def main() raises:
@@ -9,5 +10,7 @@ def main() raises:
     line.start_segment(PlotPoint(2.0, 2.0))
     var figure = Figure()
     figure.add_line(line^)
-    print("figure line series:", figure.line_count())
-    print("connected segments:", figure.line(0).segment_count())
+    makedirs("output", exist_ok=True)
+    var svg = render_svg(figure, 640.0, 480.0)
+    save_svg("output/basic.svg", svg)
+    print("Wrote output/basic.svg")

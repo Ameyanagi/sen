@@ -321,6 +321,36 @@ def test_figure_add_line_moves_series() raises:
     assert_true(stored.point(1).y() == 3.0)
 
 
+def test_figure_bounds_combine_nonempty_lines_and_skip_empty_lines() raises:
+    var first = LineSeries()
+    first.append(PlotPoint(-2.0, 4.0))
+    first.append(PlotPoint(1.0, -1.0))
+    var second = LineSeries()
+    second.append(PlotPoint(3.0, 2.0))
+    second.append(PlotPoint(0.0, 7.0))
+    var figure = Figure()
+    figure.add_line(LineSeries())
+    figure.add_line(first^)
+    figure.add_line(second^)
+
+    var bounds = figure.bounds()
+    assert_true(bounds.x_min() == -2.0)
+    assert_true(bounds.x_max() == 3.0)
+    assert_true(bounds.y_min() == -1.0)
+    assert_true(bounds.y_max() == 7.0)
+
+
+def test_figure_bounds_reject_figures_without_points() raises:
+    var empty = Figure()
+    with assert_raises(contains="empty figure has no data bounds"):
+        _ = empty.bounds()
+
+    var only_empty_lines = Figure()
+    only_empty_lines.add_line(LineSeries())
+    with assert_raises(contains="empty figure has no data bounds"):
+        _ = only_empty_lines.bounds()
+
+
 def test_figure_owns_renderer_neutral_series() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))

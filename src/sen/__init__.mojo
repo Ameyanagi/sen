@@ -3,3 +3,4 @@
 from .layout import Margins, Rect, plot_area
 from .scale import LinearScale, linear_ticks
 from .series import DataBounds, Figure, LineSeries, PlotPoint
+from .svg import render_svg, save_svg

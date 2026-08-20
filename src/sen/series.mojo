@@ -350,6 +350,33 @@ struct Figure(Copyable):
     def line_count(self) -> Int:
         return len(self._lines)
 
+    def bounds(self) raises -> DataBounds:
+        """Return combined bounds for every nonempty line series.
+
+        Empty line series do not contribute an extent. A figure with no stored
+        points has no data domain and is rejected.
+        """
+        var first_nonempty = 0
+        while first_nonempty < len(self._lines):
+            if not self._lines[first_nonempty].is_empty():
+                break
+            first_nonempty += 1
+        if first_nonempty == len(self._lines):
+            raise Error("empty figure has no data bounds")
+
+        var combined = self._lines[first_nonempty].bounds()
+        for index in range(first_nonempty + 1, len(self._lines)):
+            if self._lines[index].is_empty():
+                continue
+            var current = self._lines[index].bounds()
+            combined = DataBounds._from_validated(
+                min(combined._x_min, current._x_min),
+                max(combined._x_max, current._x_max),
+                min(combined._y_min, current._y_min),
+                max(combined._y_max, current._y_max),
+            )
+        return combined
+
     def line(self, index: Int) raises -> ref[self._lines[index]] LineSeries:
         """Return a read reference to a line series by position."""
         if index < 0 or index >= len(self._lines):
