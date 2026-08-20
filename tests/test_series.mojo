@@ -1,4 +1,11 @@
-from sen import DataBounds, Figure, LineSeries, PlotPoint
+from sen import (
+    DataBounds,
+    Figure,
+    LineSeries,
+    MissingPolicy,
+    PlotPoint,
+    ScatterSeries,
+)
 from std.collections import List
 from std.testing import (
     TestSuite,
@@ -395,6 +402,282 @@ def test_mutating_explicit_line_copy_does_not_change_figure() raises:
     returned.append(PlotPoint(2.0, 3.0))
     assert_equal(returned.point_count(), 2)
     assert_equal(figure.line(0).point_count(), 1)
+
+
+def test_missing_policy_error_reports_the_first_missing_observation() raises:
+    var xs: List[Float64] = [0.0, Float64("nan"), 2.0]
+    var ys: List[Float64] = [1.0, 0.5, 3.0]
+    var figure = Figure()
+
+    with assert_raises(
+        contains=(
+            "missing value at index 1 (x=nan, y=0.5); pass "
+            "missing=MissingPolicy.SEGMENT or MissingPolicy.DROP to handle gaps"
+        )
+    ):
+        figure.line(xs, ys)
+
+    assert_equal(figure.line_count(), 0)
+
+
+def test_missing_policy_segment_builds_exact_gap_topology() raises:
+    var nan = Float64("nan")
+    var xs: List[Float64] = [nan, 0.0, 1.0, nan, nan, 4.0, 5.0, nan]
+    var ys: List[Float64] = [0.0, 1.0, 2.0, nan, 3.0, 5.0, 6.0, nan]
+    var figure = Figure()
+
+    figure.line(xs, ys, missing=MissingPolicy.SEGMENT)
+
+    ref line = figure.line(0)
+    assert_equal(line.point_count(), 4)
+    assert_equal(line.segment_count(), 2)
+    assert_equal(line.segment_point_count(0), 2)
+    assert_equal(line.segment_point_count(1), 2)
+    assert_true(line.segment_point(0, 0).x() == 0.0)
+    assert_true(line.segment_point(1, 0).x() == 4.0)
+
+
+def test_missing_policy_segment_all_missing_produces_an_empty_series() raises:
+    var nan = Float64("nan")
+    var xs: List[Float64] = [nan, nan, nan]
+    var ys: List[Float64] = [0.0, nan, 2.0]
+    var figure = Figure()
+
+    figure.line(xs, ys, missing=MissingPolicy.SEGMENT)
+
+    assert_equal(figure.line_count(), 1)
+    assert_true(figure.line(0).is_empty())
+    assert_equal(figure.line(0).segment_count(), 0)
+
+
+def test_missing_policy_drop_joins_the_remaining_line_points() raises:
+    var xs: List[Float64] = [0.0, Float64("nan"), 2.0, 3.0]
+    var ys: List[Float64] = [1.0, 5.0, Float64("nan"), 4.0]
+    var figure = Figure()
+
+    figure.line(xs, ys, missing=MissingPolicy.DROP)
+
+    ref line = figure.line(0)
+    assert_equal(line.point_count(), 2)
+    assert_equal(line.segment_count(), 1)
+    assert_equal(line.segment_point_count(0), 2)
+    assert_true(line.point(0).x() == 0.0)
+    assert_true(line.point(1).x() == 3.0)
+
+
+def test_non_nan_infinities_raise_under_every_missing_policy() raises:
+    var positive: List[Float64] = [0.0, Float64("inf")]
+    var negative: List[Float64] = [0.0, Float64("-inf")]
+    var finite: List[Float64] = [1.0, 2.0]
+    var error_positive = Figure()
+    var segment_positive = Figure()
+    var drop_positive = Figure()
+    var error_negative = Figure()
+    var segment_negative = Figure()
+    var drop_negative = Figure()
+    var scatter_error = Figure()
+    var scatter_segment = Figure()
+    var scatter_drop = Figure()
+
+    with assert_raises(contains="plot coordinates must be finite"):
+        error_positive.line(positive, finite, missing=MissingPolicy.ERROR)
+    with assert_raises(contains="plot coordinates must be finite"):
+        segment_positive.line(positive, finite, missing=MissingPolicy.SEGMENT)
+    with assert_raises(contains="plot coordinates must be finite"):
+        drop_positive.line(positive, finite, missing=MissingPolicy.DROP)
+    with assert_raises(contains="plot coordinates must be finite"):
+        error_negative.line(finite, negative, missing=MissingPolicy.ERROR)
+    with assert_raises(contains="plot coordinates must be finite"):
+        segment_negative.line(finite, negative, missing=MissingPolicy.SEGMENT)
+    with assert_raises(contains="plot coordinates must be finite"):
+        drop_negative.line(finite, negative, missing=MissingPolicy.DROP)
+    with assert_raises(contains="plot coordinates must be finite"):
+        scatter_error.scatter(positive, finite, missing=MissingPolicy.ERROR)
+    with assert_raises(contains="plot coordinates must be finite"):
+        scatter_segment.scatter(positive, finite, missing=MissingPolicy.SEGMENT)
+    with assert_raises(contains="plot coordinates must be finite"):
+        scatter_drop.scatter(positive, finite, missing=MissingPolicy.DROP)
+
+    var nan_and_inf_x: List[Float64] = [Float64("nan")]
+    var nan_and_inf_y: List[Float64] = [Float64("inf")]
+    var mixed_segment = Figure()
+    var mixed_drop = Figure()
+    with assert_raises(contains="plot coordinates must be finite"):
+        mixed_segment.line(
+            nan_and_inf_x,
+            nan_and_inf_y,
+            missing=MissingPolicy.SEGMENT,
+        )
+    with assert_raises(contains="plot coordinates must be finite"):
+        mixed_drop.scatter(
+            nan_and_inf_x,
+            nan_and_inf_y,
+            missing=MissingPolicy.DROP,
+        )
+
+
+def test_scatter_series_bulk_append_bounds_and_validation() raises:
+    var xs: List[Float64] = [4.0, -1.0, 2.0]
+    var ys: List[Float64] = [-2.0, 3.0, 1.0]
+    var scatter = ScatterSeries.from_xy(xs, ys)
+
+    scatter.append(PlotPoint(6.0, -5.0))
+
+    assert_equal(scatter.point_count(), 4)
+    assert_true(scatter.point(0).x() == 4.0)
+    assert_true(scatter.point(3).y() == -5.0)
+    var bounds = scatter.bounds()
+    assert_true(bounds.x_min() == -1.0)
+    assert_true(bounds.x_max() == 6.0)
+    assert_true(bounds.y_min() == -5.0)
+    assert_true(bounds.y_max() == 3.0)
+    scatter.validate()
+
+
+def test_scatter_series_rejects_invalid_inputs_and_empty_bounds() raises:
+    var empty = ScatterSeries()
+    assert_true(empty.is_empty())
+    with assert_raises(contains="empty scatter-series has no data bounds"):
+        _ = empty.bounds()
+    with assert_raises(contains="scatter-series point index is out of bounds"):
+        _ = empty.point(0)
+
+    var two_values: List[Float64] = [0.0, 1.0]
+    var one_value: List[Float64] = [0.0]
+    with assert_raises(contains="coordinate sequences must have equal length"):
+        _ = ScatterSeries.from_xy(two_values, one_value)
+
+    var nonfinite: List[Float64] = [0.0, Float64("inf")]
+    with assert_raises(contains="plot coordinates must be finite"):
+        _ = ScatterSeries.from_xy(two_values, nonfinite)
+
+    var invalid = PlotPoint(0.0, 1.0)
+    invalid._x = Float64("nan")
+    with assert_raises(contains="plot coordinates must be finite"):
+        empty.append(invalid)
+
+    var mismatched = ScatterSeries()
+    mismatched._xs.append(0.0)
+    with assert_raises(contains="coordinate buffers must have equal length"):
+        mismatched.validate()
+
+
+def test_scatter_segment_and_drop_missing_policies_are_identical() raises:
+    var xs: List[Float64] = [0.0, Float64("nan"), 2.0, 3.0]
+    var ys: List[Float64] = [1.0, 4.0, Float64("nan"), 5.0]
+    var segmented = Figure()
+    var dropped = Figure()
+    var error = Figure()
+
+    with assert_raises(contains="missing value at index 1"):
+        error.scatter(xs, ys)
+    segmented.scatter(xs, ys, missing=MissingPolicy.SEGMENT)
+    dropped.scatter(xs, ys, missing=MissingPolicy.DROP)
+
+    ref segmented_series = segmented.scatter(0)
+    ref dropped_series = dropped.scatter(0)
+    assert_equal(segmented_series.point_count(), dropped_series.point_count())
+    for index in range(segmented_series.point_count()):
+        assert_true(
+            segmented_series.point(index).x() == dropped_series.point(index).x()
+        )
+        assert_true(
+            segmented_series.point(index).y() == dropped_series.point(index).y()
+        )
+
+
+def test_figure_one_call_entries_store_labels_and_check_lengths() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [1.0, 2.0]
+    var one_value: List[Float64] = [0.0]
+    var figure = Figure()
+
+    figure.line(xs, ys, label="trend")
+    figure.scatter(xs, ys, label="samples")
+    figure.line(xs, ys, label="forecast")
+
+    assert_equal(figure.line_count(), 2)
+    assert_equal(figure.scatter_count(), 1)
+    assert_equal(figure.line_label(0), "trend")
+    assert_equal(figure.line_label(1), "forecast")
+    assert_equal(figure.scatter_label(0), "samples")
+    with assert_raises(contains="coordinate sequences must have equal length"):
+        figure.line(xs, one_value)
+    with assert_raises(contains="coordinate sequences must have equal length"):
+        figure.scatter(xs, one_value)
+
+
+def test_figure_lower_level_add_paths_use_empty_labels() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 1.0))
+    var scatter = ScatterSeries()
+    scatter.append(PlotPoint(2.0, 3.0))
+    var figure = Figure()
+
+    figure.add_line(line^)
+    figure.add_scatter(scatter^)
+
+    assert_equal(figure.line_label(0), "")
+    assert_equal(figure.scatter_label(0), "")
+    assert_true(not figure.is_empty())
+
+
+def test_figure_bounds_and_validation_cover_lines_and_scatters() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(-2.0, 4.0))
+    var scatter = ScatterSeries()
+    scatter.append(PlotPoint(5.0, -3.0))
+    var figure = Figure()
+    figure.add_scatter(ScatterSeries())
+    figure.add_line(line^)
+    figure.add_scatter(scatter^)
+
+    var bounds = figure.bounds()
+    assert_true(bounds.x_min() == -2.0)
+    assert_true(bounds.x_max() == 5.0)
+    assert_true(bounds.y_min() == -3.0)
+    assert_true(bounds.y_max() == 4.0)
+    figure.validate()
+
+    var only_empty_scatter = Figure()
+    assert_true(only_empty_scatter.is_empty())
+    only_empty_scatter.add_scatter(ScatterSeries())
+    assert_false(only_empty_scatter.is_empty())
+    with assert_raises(contains="empty figure has no data bounds"):
+        _ = only_empty_scatter.bounds()
+
+
+def test_figure_scatter_indices_and_corruption_are_checked() raises:
+    var figure = Figure()
+    with assert_raises(contains="figure scatter index is out of bounds"):
+        _ = figure.scatter(0)
+    with assert_raises(contains="figure line-label index is out of bounds"):
+        _ = figure.line_label(0)
+    with assert_raises(contains="figure scatter-label index is out of bounds"):
+        _ = figure.scatter_label(0)
+
+    var scatter = ScatterSeries()
+    scatter.append(PlotPoint(0.0, 1.0))
+    figure.add_scatter(scatter^)
+    figure._scatters[0]._ys[0] = Float64("nan")
+    with assert_raises(contains="plot coordinates must be finite"):
+        figure.validate()
+
+
+def test_figure_text_setters_round_trip_any_string() raises:
+    var figure = Figure()
+
+    assert_equal(figure.title(), "")
+    assert_equal(figure.x_label(), "")
+    assert_equal(figure.y_label(), "")
+
+    figure.set_title("A <title>")
+    figure.set_x_label("x & time")
+    figure.set_y_label("'value'")
+
+    assert_equal(figure.title(), "A <title>")
+    assert_equal(figure.x_label(), "x & time")
+    assert_equal(figure.y_label(), "'value'")
 
 
 def main() raises:

@@ -1,4 +1,13 @@
-from sen import Figure, LineSeries, Margins, PlotPoint, render_svg, save_svg
+from sen import (
+    Figure,
+    LineSeries,
+    Margins,
+    MissingPolicy,
+    PlotPoint,
+    render_svg,
+    save_svg,
+)
+from std.collections import List
 
 
 def fixture_margins() raises -> Margins:
@@ -39,6 +48,34 @@ def segment_gap_figure() raises -> Figure:
     return figure^
 
 
+def titled_labels_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var ys: List[Float64] = [0.0, 1.0, 0.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_title("Deterministic <plot>")
+    figure.set_x_label("x & time")
+    figure.set_y_label("value 'y'")
+    return figure^
+
+
+def scatter_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 0.5, 1.0, 1.5, 2.0]
+    var ys: List[Float64] = [0.0, 0.5, 1.0, 0.5, 0.0]
+    var figure = Figure()
+    figure.scatter(xs, ys)
+    return figure^
+
+
+def missing_segment_figure() raises -> Figure:
+    var nan = Float64("nan")
+    var xs: List[Float64] = [0.0, 1.0, nan, nan, 3.0, 4.0]
+    var ys: List[Float64] = [0.0, 1.0, nan, 0.5, 1.0, 0.0]
+    var figure = Figure()
+    figure.line(xs, ys, missing=MissingPolicy.SEGMENT)
+    return figure^
+
+
 def main() raises:
     var margins = fixture_margins()
     var single = single_line_figure()
@@ -56,4 +93,19 @@ def main() raises:
         "tests/fixtures/segment_gap.svg",
         render_svg(gap, 120.0, 80.0, margins),
     )
-    print("Regenerated 3 SVG fixtures under tests/fixtures/.")
+    var titled = titled_labels_figure()
+    save_svg(
+        "tests/fixtures/titled_labels.svg",
+        render_svg(titled, 120.0, 80.0, margins),
+    )
+    var scatter = scatter_figure()
+    save_svg(
+        "tests/fixtures/scatter_basic.svg",
+        render_svg(scatter, 120.0, 80.0, margins),
+    )
+    var missing = missing_segment_figure()
+    save_svg(
+        "tests/fixtures/missing_segment.svg",
+        render_svg(missing, 120.0, 80.0, margins),
+    )
+    print("Regenerated 6 SVG fixtures under tests/fixtures/.")

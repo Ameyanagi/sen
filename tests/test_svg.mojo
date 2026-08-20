@@ -1,5 +1,6 @@
-from sen import Figure, LineSeries, Margins, PlotPoint, render_svg
+from sen import Figure, LineSeries, Margins, MissingPolicy, PlotPoint, render_svg
 from sen.svg import _escape_xml, _format_decimal, _format_svg_number, _tick_label
+from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -41,6 +42,34 @@ def gap_figure() raises -> Figure:
     return figure^
 
 
+def titled_labels_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0]
+    var ys: List[Float64] = [0.0, 1.0, 0.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_title("Deterministic <plot>")
+    figure.set_x_label("x & time")
+    figure.set_y_label("value 'y'")
+    return figure^
+
+
+def scatter_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 0.5, 1.0, 1.5, 2.0]
+    var ys: List[Float64] = [0.0, 0.5, 1.0, 0.5, 0.0]
+    var figure = Figure()
+    figure.scatter(xs, ys)
+    return figure^
+
+
+def missing_segment_figure() raises -> Figure:
+    var nan = Float64("nan")
+    var xs: List[Float64] = [0.0, 1.0, nan, nan, 3.0, 4.0]
+    var ys: List[Float64] = [0.0, 1.0, nan, 0.5, 1.0, 0.0]
+    var figure = Figure()
+    figure.line(xs, ys, missing=MissingPolicy.SEGMENT)
+    return figure^
+
+
 def read_fixture(path: StringSlice) raises -> String:
     with open(path, "r") as fixture:
         return fixture.read()
@@ -56,6 +85,15 @@ def count_occurrences(text: StringSlice, needle: StringSlice) -> Int:
         else:
             index += 1
     return count
+
+
+def first_occurrence(text: StringSlice, needle: StringSlice, start: Int = 0) -> Int:
+    var index = start
+    while index + needle.byte_length() <= text.byte_length():
+        if text[byte = index : index + needle.byte_length()] == needle:
+            return index
+        index += 1
+    return -1
 
 
 def test_single_line_golden_fixture_is_byte_exact() raises:
@@ -74,6 +112,24 @@ def test_gap_golden_fixture_is_byte_exact() raises:
     var figure = gap_figure()
     var actual = render_svg(figure, 120.0, 80.0, fixture_margins())
     assert_equal(actual, read_fixture("tests/fixtures/segment_gap.svg"))
+
+
+def test_titled_labels_golden_fixture_is_byte_exact() raises:
+    var figure = titled_labels_figure()
+    var actual = render_svg(figure, 120.0, 80.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/titled_labels.svg"))
+
+
+def test_scatter_golden_fixture_is_byte_exact() raises:
+    var figure = scatter_figure()
+    var actual = render_svg(figure, 120.0, 80.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/scatter_basic.svg"))
+
+
+def test_missing_segment_golden_fixture_is_byte_exact() raises:
+    var figure = missing_segment_figure()
+    var actual = render_svg(figure, 120.0, 80.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/missing_segment.svg"))
 
 
 def test_xml_escape_covers_predefined_entities_and_unicode() raises:
@@ -141,6 +197,50 @@ def test_constant_domains_use_documented_padding() raises:
 
     assert_equal(count_occurrences(svg, "<polyline "), 1)
     assert_equal(count_occurrences(svg, 'points="68,34"'), 1)
+
+
+def test_lines_and_scatters_render_in_interleaved_insertion_order() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var rising: List[Float64] = [0.0, 1.0]
+    var falling: List[Float64] = [1.0, 0.0]
+    var marker_x: List[Float64] = [0.5]
+    var marker_y: List[Float64] = [0.5]
+    var figure = Figure()
+    figure.line(xs, rising)
+    figure.scatter(marker_x, marker_y)
+    figure.line(xs, falling)
+
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+    var first_line = first_occurrence(svg, "<polyline ")
+    var marker = first_occurrence(svg, "<circle ")
+    var second_line = first_occurrence(svg, "<polyline ", first_line + 1)
+
+    assert_true(first_line >= 0)
+    assert_true(first_line < marker)
+    assert_true(marker < second_line)
+
+
+def test_title_and_axis_labels_are_escaped_and_use_fixed_geometry() raises:
+    var figure = titled_labels_figure()
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+
+    assert_equal(count_occurrences(svg, ">Deterministic &lt;plot&gt;</text>"), 1)
+    assert_equal(count_occurrences(svg, ">x &amp; time</text>"), 1)
+    assert_equal(count_occurrences(svg, ">value &apos;y&apos;</text>"), 1)
+    assert_equal(count_occurrences(svg, 'font-size="12" text-anchor="middle"'), 1)
+    assert_equal(count_occurrences(svg, 'font-size="10" text-anchor="middle"'), 2)
+    assert_equal(count_occurrences(svg, 'transform="rotate(-90 '), 1)
+
+
+def test_default_render_size_is_640_by_480() raises:
+    var figure = single_line_figure()
+    var svg = render_svg(figure)
+
+    assert_true(
+        svg.startswith(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"'
+        )
+    )
 
 
 def main() raises:

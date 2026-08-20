@@ -1,4 +1,4 @@
-"""Deterministic SVG rendering for line figures."""
+"""Deterministic SVG rendering for scientific figures."""
 
 from std.collections import List
 from std.math import floor, isfinite
@@ -18,6 +18,10 @@ struct _CommandKind(Copyable, ImplicitlyCopyable):
     comptime X_LABEL = _CommandKind(_value=4)
     comptime Y_LABEL = _CommandKind(_value=5)
     comptime SERIES = _CommandKind(_value=6)
+    comptime TITLE = _CommandKind(_value=7)
+    comptime X_TITLE = _CommandKind(_value=8)
+    comptime Y_TITLE = _CommandKind(_value=9)
+    comptime MARKER = _CommandKind(_value=10)
 
     def __init__(out self, *, _value: Int):
         self._value = _value
@@ -120,6 +124,18 @@ def _polyline_command(var points: List[_PlanPoint]) -> _DrawCommand:
         0.0,
         0.0,
         points^,
+        String(),
+    )
+
+
+def _marker_command(x: Float64, y: Float64) -> _DrawCommand:
+    return _DrawCommand(
+        _CommandKind.MARKER,
+        x,
+        y,
+        0.0,
+        0.0,
+        _empty_points(),
         String(),
     )
 
@@ -246,7 +262,19 @@ def _tick_step(ticks: List[Float64], domain_span: Float64) -> Float64:
 def _lower_figure(
     figure: Figure, width: Float64, height: Float64, margins: Margins
 ) raises -> _RenderPlan:
-    var area = plot_area(width, height, margins)
+    var title = figure.title().copy()
+    var x_label = figure.x_label().copy()
+    var y_label = figure.y_label().copy()
+    var extra_top = 18.0 if title.byte_length() > 0 else 0.0
+    var extra_bottom = 14.0 if x_label.byte_length() > 0 else 0.0
+    var extra_left = 14.0 if y_label.byte_length() > 0 else 0.0
+    var effective_margins = Margins(
+        margins.left() + extra_left,
+        margins.right(),
+        margins.top() + extra_top,
+        margins.bottom() + extra_bottom,
+    )
+    var area = plot_area(width, height, effective_margins)
     var bounds = figure.bounds()
     var x_domain = _padded_domain(bounds.x_min(), bounds.x_max(), "x")
     var y_domain = _padded_domain(bounds.y_min(), bounds.y_max(), "y")
@@ -329,16 +357,56 @@ def _lower_figure(
             )
         )
 
-    for line_index in range(figure.line_count()):
-        ref line = figure.line(line_index)
-        for segment_index in range(line.segment_count()):
-            var points = List[_PlanPoint]()
-            for point_index in range(line.segment_point_count(segment_index)):
-                var point = line.segment_point(segment_index, point_index)
-                points.append(
-                    _PlanPoint(x_scale.map(point.x()), y_scale.map(point.y()))
+    if title.byte_length() > 0:
+        commands.append(
+            _text_command(
+                _CommandKind.TITLE,
+                area.x() + area.width() / 2.0,
+                area.y() - 6.0,
+                title^,
+            )
+        )
+    if x_label.byte_length() > 0:
+        commands.append(
+            _text_command(
+                _CommandKind.X_TITLE,
+                area.x() + area.width() / 2.0,
+                bottom + 28.0,
+                x_label^,
+            )
+        )
+    if y_label.byte_length() > 0:
+        commands.append(
+            _text_command(
+                _CommandKind.Y_TITLE,
+                area.x() - 14.0,
+                area.y() + area.height() / 2.0,
+                y_label^,
+            )
+        )
+
+    for order_index in range(figure._series_count()):
+        var series_index = figure._series_index(order_index)
+        if figure._series_is_line(order_index):
+            ref line = figure.line(series_index)
+            for segment_index in range(line.segment_count()):
+                var points = List[_PlanPoint]()
+                for point_index in range(line.segment_point_count(segment_index)):
+                    var point = line.segment_point(segment_index, point_index)
+                    points.append(
+                        _PlanPoint(x_scale.map(point.x()), y_scale.map(point.y()))
+                    )
+                commands.append(_polyline_command(points^))
+        else:
+            ref scatter = figure.scatter(series_index)
+            for point_index in range(scatter.point_count()):
+                var point = scatter.point(point_index)
+                commands.append(
+                    _marker_command(
+                        x_scale.map(point.x()),
+                        y_scale.map(point.y()),
+                    )
                 )
-            commands.append(_polyline_command(points^))
     return _RenderPlan(width, height, commands^)
 
 
@@ -383,8 +451,30 @@ def _append_text(mut svg: String, command: _DrawCommand) raises:
     svg += _format_svg_number(command.x1)
     svg += '" y="'
     svg += _format_svg_number(command.y1)
-    svg += '" fill="#222222" font-family="sans-serif" font-size="8"'
-    if command.kind._value == _CommandKind.X_LABEL._value:
+    svg += '"'
+    if command.kind._value == _CommandKind.Y_TITLE._value:
+        svg += ' transform="rotate(-90 '
+        svg += _format_svg_number(command.x1)
+        svg += " "
+        svg += _format_svg_number(command.y1)
+        svg += ')"'
+    svg += ' fill="#222222" font-family="sans-serif" font-size="'
+    if command.kind._value == _CommandKind.TITLE._value:
+        svg += "12"
+    elif (
+        command.kind._value == _CommandKind.X_TITLE._value
+        or command.kind._value == _CommandKind.Y_TITLE._value
+    ):
+        svg += "10"
+    else:
+        svg += "8"
+    svg += '"'
+    if (
+        command.kind._value == _CommandKind.X_LABEL._value
+        or command.kind._value == _CommandKind.TITLE._value
+        or command.kind._value == _CommandKind.X_TITLE._value
+        or command.kind._value == _CommandKind.Y_TITLE._value
+    ):
         svg += ' text-anchor="middle"'
     else:
         svg += ' text-anchor="end"'
@@ -402,6 +492,14 @@ def _append_polyline(mut svg: String, command: _DrawCommand) raises:
         svg += ","
         svg += _format_svg_number(command.points[index].y)
     svg += '" fill="none" stroke="#2563eb" stroke-width="1.5"/>\n'
+
+
+def _append_marker(mut svg: String, command: _DrawCommand) raises:
+    svg += '  <circle cx="'
+    svg += _format_svg_number(command.x1)
+    svg += '" cy="'
+    svg += _format_svg_number(command.y1)
+    svg += '" r="2.5" fill="#2563eb"/>\n'
 
 
 def _encode_svg(plan: _RenderPlan) raises -> String:
@@ -429,10 +527,15 @@ def _encode_svg(plan: _RenderPlan) raises -> String:
         elif (
             command.kind._value == _CommandKind.X_LABEL._value
             or command.kind._value == _CommandKind.Y_LABEL._value
+            or command.kind._value == _CommandKind.TITLE._value
+            or command.kind._value == _CommandKind.X_TITLE._value
+            or command.kind._value == _CommandKind.Y_TITLE._value
         ):
             _append_text(svg, command)
-        else:
+        elif command.kind._value == _CommandKind.SERIES._value:
             _append_polyline(svg, command)
+        else:
+            _append_marker(svg, command)
     svg += "</svg>\n"
     return svg^
 
@@ -447,17 +550,27 @@ def render_svg(
 
     Empty figures are rejected. Each constant axis is padded by the larger of
     0.5 or five percent of the constant's magnitude before ticks and scales are
-    built. Geometry uses fixed-point formatting with at most three fractional
-    digits, half-away-from-zero rounding, stripped trailing zeros, normalized
-    negative zero, and no exponent notation. The hand-written encoder emits a
-    fixed element order and fixed left-to-right attribute order. The returned
-    document ends with exactly one newline after ``</svg>``.
+    built. A nonempty title adds a fixed 18-unit top band to ``margins``;
+    nonempty x- and y-axis labels add fixed 14-unit bottom and left bands.
+    Geometry uses fixed-point formatting with at most three fractional digits,
+    half-away-from-zero rounding, stripped trailing zeros, normalized negative
+    zero, and no exponent notation. The hand-written encoder emits a fixed
+    element order and fixed left-to-right attribute order. The returned document
+    ends with exactly one newline after ``</svg>``.
     """
     return _encode_svg(_lower_figure(figure, width, height, margins))
 
 
-def render_svg(figure: Figure, width: Float64, height: Float64) raises -> String:
-    """Render with default left/right/top/bottom margins of 40/12/12/28."""
+def render_svg(
+    figure: Figure,
+    width: Float64 = 640.0,
+    height: Float64 = 480.0,
+) raises -> String:
+    """Render with a 640x480 default size and margins of 40/12/12/28.
+
+    A nonempty title reserves a deterministic 18-unit top band. Nonempty x- and
+    y-axis labels reserve deterministic 14-unit bottom and left bands.
+    """
     return render_svg(figure, width, height, Margins(40.0, 12.0, 12.0, 28.0))
 
 
