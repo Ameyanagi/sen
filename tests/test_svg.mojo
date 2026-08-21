@@ -13,6 +13,7 @@ from sen import (
 )
 from sen.svg import _escape_xml, _format_decimal, _format_svg_number, _tick_label
 from std.collections import List
+from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -92,7 +93,7 @@ def styled_series_figure() raises -> Figure:
 
     var dashed = SeriesStyle()
     dashed = dashed.with_line_style(LineStyle.DASHED)
-    dashed = dashed.with_width(2.5)
+    dashed = dashed.with_line_width(2.5)
     var dotted = SeriesStyle(color_index=4)
     dotted = dotted.with_line_style(LineStyle.DOTTED)
 
@@ -118,7 +119,7 @@ def markers_figure() raises -> Figure:
     for index in range(len(markers)):
         var xs: List[Float64] = [Float64(index)]
         var ys: List[Float64] = [Float64(index % 2)]
-        var style = SeriesStyle().with_marker(markers[index])
+        var style = SeriesStyle().with_marker_style(markers[index])
         figure.scatter(xs, ys, style=style)
     return figure^
 
@@ -130,7 +131,7 @@ def legend_figure() raises -> Figure:
     var marker_x: List[Float64] = [1.0]
     var marker_y: List[Float64] = [1.25]
     var dashed = SeriesStyle().with_line_style(LineStyle.DASHED)
-    var square = SeriesStyle().with_marker(MarkerStyle.SQUARE)
+    var square = SeriesStyle().with_marker_style(MarkerStyle.SQUARE)
     var figure = Figure()
     figure.line(xs, first_y, label="observed")
     figure.line(xs, second_y, label="forecast", style=dashed)
@@ -365,13 +366,20 @@ def test_segment_gaps_emit_one_polyline_per_connected_segment() raises:
 
 def test_render_rejects_figures_without_points() raises:
     var empty = Figure()
-    with assert_raises(contains="empty figure has no data bounds"):
+    with assert_raises(
+        contains=(
+            "figure has no series; add data with line() or scatter() before rendering"
+        )
+    ):
         _ = render_svg(empty, 120.0, 80.0)
 
-    var only_empty_lines = Figure()
-    only_empty_lines.add_line(LineSeries())
-    with assert_raises(contains="empty figure has no data bounds"):
-        _ = render_svg(only_empty_lines, 120.0, 80.0)
+    var coordinates = List[Float64]()
+    var only_empty_series = Figure()
+    only_empty_series.line(coordinates, coordinates)
+    with assert_raises(
+        contains="figure has 1 series but all are empty; add points before rendering"
+    ):
+        _ = render_svg(only_empty_series, 120.0, 80.0)
 
 
 def test_constant_domains_use_documented_padding() raises:
@@ -413,7 +421,7 @@ def test_every_marker_shape_uses_its_fixed_svg_element() raises:
 def test_none_marker_on_scatter_falls_back_to_circle() raises:
     var xs: List[Float64] = [0.0]
     var ys: List[Float64] = [0.0]
-    var style = SeriesStyle().with_marker(MarkerStyle.NONE)
+    var style = SeriesStyle().with_marker_style(MarkerStyle.NONE)
     var figure = Figure()
     figure.scatter(xs, ys, style=style)
 
@@ -602,6 +610,46 @@ def test_explicit_color_does_not_advance_auto_palette_counter() raises:
     assert_true(blue >= 0)
     assert_true(blue < purple)
     assert_true(purple < orange)
+
+
+def test_custom_colors_cover_series_legends_and_skip_auto_counter() raises:
+    var xs: List[Float64] = [0.0, 1.0]
+    var ys: List[Float64] = [0.0, 1.0]
+    var line_style = SeriesStyle(color_index=4).with_color("#8B1E3F")
+    var scatter_style = SeriesStyle(color="#2468AC")
+    var figure = Figure()
+    figure.line(xs, ys, label="custom line", style=line_style)
+    figure.scatter(xs, ys, label="custom scatter", style=scatter_style)
+    figure.line(xs, ys)
+
+    var svg = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(count_occurrences(svg, 'stroke="#8b1e3f"'), 2)
+    assert_equal(count_occurrences(svg, 'fill="#2468ac"'), 3)
+    assert_equal(count_occurrences(svg, 'stroke="#1f77b4"'), 1)
+    assert_equal(count_occurrences(svg, "#9467bd"), 0)
+    assert_equal(count_occurrences(svg, "#ff7f0e"), 0)
+
+
+def test_add_line_label_produces_legend_entry() raises:
+    var line = LineSeries()
+    line.append(PlotPoint(0.0, 0.0))
+    line.append(PlotPoint(1.0, 1.0))
+    var figure = Figure()
+    figure.add_line(line^, label="owned line")
+
+    assert_equal(figure.line_label(0), "owned line")
+    var svg = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(count_occurrences(svg, ">owned line</text>"), 1)
+
+
+def test_figure_save_svg_accepts_size_and_creates_parent_directories() raises:
+    var figure = single_line_figure()
+    var path = String(".pixi/test-files/sen-save-svg/nested/figure.svg")
+
+    figure.save_svg(path, 160.0, 100.0)
+
+    assert_true(Path(path).exists())
+    assert_equal(Path(path).read_text(), render_svg(figure, 160.0, 100.0))
 
 
 def test_line_dasharrays_and_widths_use_fixed_svg_attributes() raises:

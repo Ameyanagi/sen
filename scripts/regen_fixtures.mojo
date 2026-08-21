@@ -90,7 +90,7 @@ def styled_series_figure() raises -> Figure:
 
     var dashed = SeriesStyle()
     dashed = dashed.with_line_style(LineStyle.DASHED)
-    dashed = dashed.with_width(2.5)
+    dashed = dashed.with_line_width(2.5)
     var dotted = SeriesStyle(color_index=4)
     dotted = dotted.with_line_style(LineStyle.DOTTED)
 
@@ -116,7 +116,7 @@ def markers_figure() raises -> Figure:
     for index in range(len(markers)):
         var xs: List[Float64] = [Float64(index)]
         var ys: List[Float64] = [Float64(index % 2)]
-        var style = SeriesStyle().with_marker(markers[index])
+        var style = SeriesStyle().with_marker_style(markers[index])
         figure.scatter(xs, ys, style=style)
     return figure^
 
@@ -128,7 +128,7 @@ def legend_figure() raises -> Figure:
     var marker_x: List[Float64] = [1.0]
     var marker_y: List[Float64] = [1.25]
     var dashed = SeriesStyle().with_line_style(LineStyle.DASHED)
-    var square = SeriesStyle().with_marker(MarkerStyle.SQUARE)
+    var square = SeriesStyle().with_marker_style(MarkerStyle.SQUARE)
     var figure = Figure()
     figure.line(xs, first_y, label="observed")
     figure.line(xs, second_y, label="forecast", style=dashed)

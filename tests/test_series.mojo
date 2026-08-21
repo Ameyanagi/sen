@@ -57,6 +57,16 @@ def test_line_series_from_xy_preserves_order_and_computes_bounds() raises:
     assert_true(bounds.y_max() == 3.0)
 
 
+def test_line_series_from_xy_accepts_one_list_for_both_coordinates() raises:
+    var coordinates: List[Float64] = [-2.0, 0.5, 4.0]
+    var line = LineSeries.from_xy(coordinates, coordinates)
+
+    assert_equal(line.point_count(), 3)
+    for index in range(line.point_count()):
+        assert_true(line.point(index).x() == coordinates[index])
+        assert_true(line.point(index).y() == coordinates[index])
+
+
 def test_line_series_from_xy_rejects_invalid_inputs() raises:
     var two_values: List[Float64] = [0.0, 1.0]
     var one_value: List[Float64] = [0.0]
@@ -351,12 +361,18 @@ def test_figure_bounds_combine_nonempty_lines_and_skip_empty_lines() raises:
 
 def test_figure_bounds_reject_figures_without_points() raises:
     var empty = Figure()
-    with assert_raises(contains="empty figure has no data bounds"):
+    with assert_raises(
+        contains=(
+            "figure has no series; add data with line() or scatter() before rendering"
+        )
+    ):
         _ = empty.bounds()
 
     var only_empty_lines = Figure()
     only_empty_lines.add_line(LineSeries())
-    with assert_raises(contains="empty figure has no data bounds"):
+    with assert_raises(
+        contains="figure has 1 series but all are empty; add points before rendering"
+    ):
         _ = only_empty_lines.bounds()
 
 
@@ -609,17 +625,33 @@ def test_figure_one_call_entries_store_labels_and_check_lengths() raises:
         figure.scatter(xs, one_value)
 
 
-def test_figure_lower_level_add_paths_use_empty_labels() raises:
+def test_figure_coordinate_entries_accept_one_list_for_both_coordinates() raises:
+    var coordinates: List[Float64] = [-1.0, 0.0, 2.0]
+    var figure = Figure()
+
+    figure.line(coordinates, coordinates)
+    figure.scatter(coordinates, coordinates)
+
+    ref line = figure.line(0)
+    ref scatter = figure.scatter(0)
+    for index in range(len(coordinates)):
+        assert_true(line.point(index).x() == coordinates[index])
+        assert_true(line.point(index).y() == coordinates[index])
+        assert_true(scatter.point(index).x() == coordinates[index])
+        assert_true(scatter.point(index).y() == coordinates[index])
+
+
+def test_figure_lower_level_add_paths_store_given_or_empty_labels() raises:
     var line = LineSeries()
     line.append(PlotPoint(0.0, 1.0))
     var scatter = ScatterSeries()
     scatter.append(PlotPoint(2.0, 3.0))
     var figure = Figure()
 
-    figure.add_line(line^)
+    figure.add_line(line^, label="owned line")
     figure.add_scatter(scatter^)
 
-    assert_equal(figure.line_label(0), "")
+    assert_equal(figure.line_label(0), "owned line")
     assert_equal(figure.scatter_label(0), "")
     assert_true(not figure.is_empty())
 
@@ -645,8 +677,21 @@ def test_figure_bounds_and_validation_cover_lines_and_scatters() raises:
     assert_true(only_empty_scatter.is_empty())
     only_empty_scatter.add_scatter(ScatterSeries())
     assert_false(only_empty_scatter.is_empty())
-    with assert_raises(contains="empty figure has no data bounds"):
+    with assert_raises(
+        contains="figure has 1 series but all are empty; add points before rendering"
+    ):
         _ = only_empty_scatter.bounds()
+
+
+def test_figure_bounds_reports_empty_series_inserted_from_coordinates() raises:
+    var coordinates = List[Float64]()
+    var figure = Figure()
+    figure.line(coordinates, coordinates)
+
+    with assert_raises(
+        contains="figure has 1 series but all are empty; add points before rendering"
+    ):
+        _ = figure.bounds()
 
 
 def test_figure_scatter_indices_and_corruption_are_checked() raises:

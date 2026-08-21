@@ -2,6 +2,7 @@
 
 from std.collections import List
 from std.math import floor, isfinite, log10
+from std.os import makedirs
 
 from .layout import Margins, plot_area
 from .scale import LinearScale, LogScale, linear_ticks, log_ticks, view_bounds
@@ -51,7 +52,6 @@ struct _DrawCommand:
     var points: List[_PlanPoint]
     var text: String
     var color: String
-    var palette_slot: Int
     var series_index: Int
     var line_width: Float64
     var line_style: LineStyle
@@ -67,7 +67,6 @@ struct _DrawCommand:
         var points: List[_PlanPoint],
         var text: String,
         var color: String,
-        palette_slot: Int,
         series_index: Int,
         line_width: Float64,
         line_style: LineStyle,
@@ -81,7 +80,6 @@ struct _DrawCommand:
         self.points = points^
         self.text = text^
         self.color = color^
-        self.palette_slot = palette_slot
         self.series_index = series_index
         self.line_width = line_width
         self.line_style = line_style
@@ -137,7 +135,6 @@ def _shape_command(
         String(),
         String(),
         -1,
-        -1,
         0.0,
         LineStyle.SOLID,
         MarkerStyle.NONE,
@@ -156,7 +153,6 @@ def _text_command(
         _empty_points(),
         text^,
         String(),
-        -1,
         -1,
         0.0,
         LineStyle.SOLID,
@@ -180,7 +176,6 @@ def _polyline_command(
         points^,
         String(),
         String(color),
-        -1,
         series_index,
         line_width,
         line_style,
@@ -192,7 +187,7 @@ def _marker_command(
     kind: _CommandKind,
     x: Float64,
     y: Float64,
-    palette_slot: Int,
+    color: StringSlice,
     series_index: Int,
     marker_style: MarkerStyle,
 ) -> _DrawCommand:
@@ -204,8 +199,7 @@ def _marker_command(
         0.0,
         _empty_points(),
         String(),
-        String(),
-        palette_slot,
+        String(color),
         series_index,
         0.0,
         LineStyle.SOLID,
@@ -232,7 +226,6 @@ def _styled_line_command(
         _empty_points(),
         String(),
         String(color),
-        -1,
         -1,
         line_width,
         line_style,
@@ -662,16 +655,18 @@ def _lower_figure(
         )
 
     var auto_color_index = 0
-    var resolved_slots = List[Int](capacity=figure._series_count())
+    var resolved_colors = List[String](capacity=figure._series_count())
     for order_index in range(figure._series_count()):
         var series_index = figure._series_index(order_index)
         var style = figure._series_style(order_index)
-        var palette_slot = style.palette_slot()
-        if palette_slot == -1:
-            palette_slot = auto_color_index % 6
-            auto_color_index += 1
-        resolved_slots.append(palette_slot)
-        var color = _palette_color(palette_slot)
+        var color = style.color()
+        if color.byte_length() == 0:
+            var palette_slot = style.palette_slot()
+            if palette_slot == -1:
+                palette_slot = auto_color_index % 6
+                auto_color_index += 1
+            color = _palette_color(palette_slot)
+        resolved_colors.append(color.copy())
         if figure._series_is_line(order_index):
             ref line = figure.line(series_index)
             for segment_index in range(line.segment_count()):
@@ -730,7 +725,7 @@ def _lower_figure(
                             area.y(),
                             y_axis_kind,
                         ),
-                        palette_slot,
+                        color,
                         order_index,
                         style.marker_style(),
                     )
@@ -780,7 +775,7 @@ def _lower_figure(
                 var center_y = legend_y + 12.0 + 14.0 * Float64(row_index)
                 var glyph_x = legend_x + 6.0
                 var style = figure._series_style(order_index)
-                var palette_slot = resolved_slots[order_index]
+                ref color = resolved_colors[order_index]
                 if figure._series_is_line(order_index):
                     commands.append(
                         _styled_line_command(
@@ -789,7 +784,7 @@ def _lower_figure(
                             center_y,
                             glyph_x + 16.0,
                             center_y,
-                            _palette_color(palette_slot),
+                            color,
                             style.line_width(),
                             style.line_style(),
                         )
@@ -800,7 +795,7 @@ def _lower_figure(
                             _CommandKind.LEGEND_MARKER,
                             glyph_x + 8.0,
                             center_y,
-                            palette_slot,
+                            color,
                             -1,
                             style.marker_style(),
                         )
@@ -1032,7 +1027,7 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
     var indent = String("    ")
     if command.kind._value == _CommandKind.LEGEND_MARKER._value:
         indent = String("  ")
-    var color = _palette_color(command.palette_slot)
+    var color = command.color.copy()
     var css_class = _semantic_class(command)
     var marker = command.marker_style
     if marker == MarkerStyle.NONE or marker == MarkerStyle.CIRCLE:
@@ -1285,6 +1280,13 @@ def render_svg(
 
 
 def save_svg(path: StringSlice, svg: StringSlice) raises:
-    """Write SVG bytes exactly as supplied, propagating deterministic I/O errors."""
+    """Write supplied SVG bytes; missing parent directories are created."""
+    var slash_index = path.byte_length() - 1
+    while slash_index >= 0:
+        if path[byte = slash_index : slash_index + 1] == "/":
+            break
+        slash_index -= 1
+    if slash_index > 0:
+        makedirs(path[byte=:slash_index], exist_ok=True)
     with open(path, "w") as output:
         output.write(svg)

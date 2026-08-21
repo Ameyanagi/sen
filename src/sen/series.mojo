@@ -222,7 +222,10 @@ struct LineSeries(Copyable):
         self._segment_starts = segment_starts^
 
     @staticmethod
-    def from_xy(x: Span[Float64, ...], y: Span[Float64, ...]) raises -> Self:
+    def from_xy(
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
+    ) raises -> Self:
         """Build a series from coordinate spans using the bulk-data fast path.
 
         ``List[Float64]`` values convert implicitly to the accepted span shape.
@@ -250,8 +253,8 @@ struct LineSeries(Copyable):
 
     @staticmethod
     def _from_xy_missing(
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         missing: MissingPolicy,
     ) raises -> Self:
         if len(x) != len(y):
@@ -330,7 +333,11 @@ struct LineSeries(Copyable):
         self._xs.append(point._x)
         self._ys.append(point._y)
 
-    def append_all(mut self, x: Span[Float64, ...], y: Span[Float64, ...]) raises:
+    def append_all(
+        mut self,
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
+    ) raises:
         """Append a validated coordinate batch to the current segment."""
         if len(x) != len(y):
             raise Error("x and y coordinate sequences must have equal length")
@@ -434,7 +441,10 @@ struct ScatterSeries(Copyable):
         self._ys = ys^
 
     @staticmethod
-    def from_xy(x: Span[Float64, ...], y: Span[Float64, ...]) raises -> Self:
+    def from_xy(
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
+    ) raises -> Self:
         """Build markers in input order; reject unequal lengths or non-finite data."""
         if len(x) != len(y):
             raise Error("x and y coordinate sequences must have equal length")
@@ -451,8 +461,8 @@ struct ScatterSeries(Copyable):
 
     @staticmethod
     def _from_xy_missing(
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         missing: MissingPolicy,
     ) raises -> Self:
         if len(x) != len(y):
@@ -676,20 +686,38 @@ struct Figure(Copyable):
         self._scatter_styles.append(style)
         self._order.append(_SeriesOrder(_SeriesKind.SCATTER, index))
 
-    def add_line(mut self, var line: LineSeries, style: SeriesStyle = SeriesStyle()):
-        """Take ownership in insertion order without validation or raising."""
-        self._insert_line(line^, String(), style)
+    def add_line(
+        mut self,
+        var line: LineSeries,
+        style: SeriesStyle = SeriesStyle(),
+        *,
+        var label: String = String(),
+    ):
+        """Take ownership and store ``label`` in insertion order.
+
+        The label is empty by default. This performs no validation and never
+        raises.
+        """
+        self._insert_line(line^, label^, style)
 
     def add_scatter(
-        mut self, var scatter: ScatterSeries, style: SeriesStyle = SeriesStyle()
+        mut self,
+        var scatter: ScatterSeries,
+        style: SeriesStyle = SeriesStyle(),
+        *,
+        var label: String = String(),
     ):
-        """Take ownership in insertion order without validation or raising."""
-        self._insert_scatter(scatter^, String(), style)
+        """Take ownership and store ``label`` in insertion order.
+
+        The label is empty by default. This performs no validation and never
+        raises.
+        """
+        self._insert_scatter(scatter^, label^, style)
 
     def line(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         var label: String = String(),
         style: SeriesStyle = SeriesStyle(),
@@ -706,8 +734,8 @@ struct Figure(Copyable):
 
     def scatter(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         var label: String = String(),
         style: SeriesStyle = SeriesStyle(),
@@ -902,9 +930,9 @@ struct Figure(Copyable):
     def bounds(self) raises -> DataBounds:
         """Return combined bounds for every nonempty line and scatter series.
 
-        Empty series do not contribute an extent. A figure with no stored points
-        has no data domain and is rejected. Bounds are combined in stable
-        line-then-scatter storage order.
+        Empty series do not contribute an extent. A figure with no series and a
+        figure whose series are all empty are rejected with distinct guidance.
+        Bounds are combined in stable line-then-scatter storage order.
         """
         var combined: Optional[DataBounds] = None
         for index in range(len(self._lines)):
@@ -936,7 +964,17 @@ struct Figure(Copyable):
             else:
                 combined = current
         if not combined:
-            raise Error("empty figure has no data bounds")
+            var series_count = len(self._lines) + len(self._scatters)
+            if series_count == 0:
+                raise Error(
+                    "figure has no series; add data with line() or scatter() "
+                    "before rendering"
+                )
+            raise Error(
+                "figure has ",
+                series_count,
+                " series but all are empty; add points before rendering",
+            )
         return combined.value()
 
     def line(self, index: Int) raises -> ref[self._lines[index]] LineSeries:
@@ -986,12 +1024,18 @@ struct Figure(Copyable):
             return self._line_labels[entry.index].copy()
         return self._scatter_labels[entry.index].copy()
 
-    def save_svg(self, path: StringSlice) raises:
-        """Render default geometry and save it deterministically.
+    def save_svg(
+        self,
+        path: StringSlice,
+        width: Float64 = 640.0,
+        height: Float64 = 480.0,
+    ) raises:
+        """Render at the requested size and save it deterministically.
 
-        Rendering and I/O errors propagate to the caller.
+        Missing parent directories are created. Rendering and I/O errors
+        propagate to the caller.
         """
         from .svg import render_svg, save_svg
 
-        var svg = render_svg(self)
+        var svg = render_svg(self, width, height)
         save_svg(path, svg)
