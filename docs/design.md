@@ -75,7 +75,8 @@ also raise. Each connected line segment becomes one SVG `polyline`, preserving
 explicit gaps.
 
 The renderer returns a `String` ending in exactly one newline after `</svg>`.
-`save_svg` is the separate I/O boundary and writes the supplied bytes unchanged.
+`save_svg` is the separate I/O boundary; it creates missing parent directories
+and writes the supplied bytes unchanged.
 Regenerate the committed golden files from the real renderer with:
 
 ```sh

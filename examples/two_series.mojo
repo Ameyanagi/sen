@@ -1,6 +1,5 @@
-from sen import Figure, render_svg, save_svg
+from sen import Figure
 from std.collections import List
-from std.os import makedirs
 
 
 def main() raises:
@@ -16,5 +15,4 @@ def main() raises:
     figure.set_y_label("response")
     figure.set_grid(True)
 
-    makedirs("output", exist_ok=True)
-    save_svg("output/two_series.svg", render_svg(figure, 720.0, 480.0))
+    figure.save_svg("output/two_series.svg", width=720, height=480)
