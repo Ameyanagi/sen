@@ -4,7 +4,7 @@ from std.math import isfinite
 
 
 struct LineStyle(Copyable, Equatable, ImplicitlyCopyable):
-    """A nominal line-stroke pattern used by series renderers."""
+    """A non-raising nominal line pattern with deterministic SVG dash geometry."""
 
     var _value: Int
 
@@ -23,7 +23,7 @@ struct LineStyle(Copyable, Equatable, ImplicitlyCopyable):
 
 
 struct MarkerStyle(Copyable, Equatable, ImplicitlyCopyable):
-    """A nominal marker shape used by scatter-series renderers."""
+    """A non-raising nominal marker with deterministic fixed SVG geometry."""
 
     var _value: Int
 
@@ -50,7 +50,9 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
 
     A palette slot of ``-1`` requests render-time automatic assignment. Direct
     mutation of underscore-prefixed storage is out of contract; call
-    ``validate`` explicitly when a checkpoint is needed.
+    ``validate`` explicitly when a checkpoint is needed. Automatic assignment
+    deterministically walks insertion order and cycles through the first six
+    Tableau-10 colors; explicit slots never advance that counter.
     """
 
     var _palette_slot: Int
@@ -59,7 +61,7 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
     var _line_width: Float64
 
     def __init__(out self):
-        """Construct an automatic solid-circle style with width 1.5."""
+        """Construct deterministic automatic defaults without raising."""
         self._palette_slot = -1
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
@@ -69,6 +71,8 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         """Construct an explicit palette style.
 
         Raises when ``color_index`` is outside the inclusive range 0 through 5.
+        Valid construction deterministically uses the selected Tableau-10 slot,
+        a solid line, circle marker, and width 1.5.
         """
         if color_index < 0 or color_index > 5:
             raise Error(
@@ -85,6 +89,7 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         """Return a copy with ``width`` without changing the receiver.
 
         Raises when ``width`` is non-finite or not strictly positive.
+        The remaining style fields are copied exactly and deterministically.
         """
         if not isfinite(width) or width <= 0.0:
             raise Error("series line width must be finite and positive; got ", width)
@@ -93,13 +98,13 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         return result^
 
     def with_line_style(self, line_style: LineStyle) -> Self:
-        """Return a copy with ``line_style`` without changing the receiver."""
+        """Return a deterministic copy with ``line_style``; this never raises."""
         var result = self.copy()
         result._line_style = line_style
         return result^
 
     def with_marker(self, marker: MarkerStyle) -> Self:
-        """Return a copy with ``marker`` without changing the receiver."""
+        """Return a deterministic copy with ``marker``; this never raises."""
         var result = self.copy()
         result._marker_style = marker
         return result^
@@ -108,7 +113,7 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         """Validate the stored palette slot and line width explicitly.
 
         Raises when the slot is outside ``-1..5`` or the width is non-finite or
-        not strictly positive.
+        not strictly positive. Checks run in stable palette-then-width order.
         """
         if self._palette_slot < -1 or self._palette_slot > 5:
             raise Error(
@@ -123,23 +128,23 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
             )
 
     def palette_slot(self) -> Int:
-        """Return ``-1`` for automatic color or the explicit palette slot."""
+        """Return deterministic ``-1`` or an explicit slot without raising."""
         return self._palette_slot
 
     def line_style(self) -> LineStyle:
-        """Return the line-stroke pattern."""
+        """Return the exact line pattern without raising."""
         return self._line_style
 
     def marker_style(self) -> MarkerStyle:
-        """Return the requested scatter marker shape."""
+        """Return the exact marker request without raising."""
         return self._marker_style
 
     def line_width(self) -> Float64:
-        """Return the positive line width."""
+        """Return the validated positive width without raising."""
         return self._line_width
 
     def __eq__(self, other: Self) -> Bool:
-        """Return whether every stored style property is equal."""
+        """Return exact deterministic field equality without raising."""
         return (
             self._palette_slot == other._palette_slot
             and self._line_style == other._line_style

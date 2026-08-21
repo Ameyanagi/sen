@@ -4,44 +4,44 @@
       <rect x="24" y="8" width="168" height="112"/>
     </clipPath>
   </defs>
-  <rect x="0" y="0" width="200" height="140" fill="#ffffff"/>
-  <rect x="24" y="8" width="168" height="112" fill="none" stroke="#d0d0d0" stroke-width="1"/>
-  <line x1="31.636" y1="8" x2="31.636" y2="120" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="69.818" y1="8" x2="69.818" y2="120" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="108" y1="8" x2="108" y2="120" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="146.182" y1="8" x2="146.182" y2="120" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="184.364" y1="8" x2="184.364" y2="120" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="114.909" x2="192" y2="114.909" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="94.545" x2="192" y2="94.545" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="74.182" x2="192" y2="74.182" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="53.818" x2="192" y2="53.818" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="33.455" x2="192" y2="33.455" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="13.091" x2="192" y2="13.091" stroke="#e0e0e0" stroke-width="1"/>
-  <line x1="24" y1="120" x2="192" y2="120" stroke="#222222" stroke-width="1"/>
-  <line x1="31.636" y1="120" x2="31.636" y2="124" stroke="#222222" stroke-width="1"/>
-  <text x="31.636" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
-  <line x1="69.818" y1="120" x2="69.818" y2="124" stroke="#222222" stroke-width="1"/>
-  <text x="69.818" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0.5</text>
-  <line x1="108" y1="120" x2="108" y2="124" stroke="#222222" stroke-width="1"/>
-  <text x="108" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1</text>
-  <line x1="146.182" y1="120" x2="146.182" y2="124" stroke="#222222" stroke-width="1"/>
-  <text x="146.182" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1.5</text>
-  <line x1="184.364" y1="120" x2="184.364" y2="124" stroke="#222222" stroke-width="1"/>
-  <text x="184.364" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
-  <line x1="24" y1="8" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
-  <line x1="20" y1="114.909" x2="24" y2="114.909" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="117.909" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0</text>
-  <line x1="20" y1="94.545" x2="24" y2="94.545" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="97.545" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.2</text>
-  <line x1="20" y1="74.182" x2="24" y2="74.182" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="77.182" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.4</text>
-  <line x1="20" y1="53.818" x2="24" y2="53.818" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="56.818" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.6</text>
-  <line x1="20" y1="33.455" x2="24" y2="33.455" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="36.455" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.8</text>
-  <line x1="20" y1="13.091" x2="24" y2="13.091" stroke="#222222" stroke-width="1"/>
-  <text x="18" y="16.091" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1</text>
+  <rect class="sen-background" x="0" y="0" width="200" height="140" fill="#ffffff"/>
+  <rect class="sen-frame" x="24" y="8" width="168" height="112" fill="none" stroke="#d0d0d0" stroke-width="1"/>
+  <line class="sen-grid" x1="31.636" y1="8" x2="31.636" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="69.818" y1="8" x2="69.818" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="108" y1="8" x2="108" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="146.182" y1="8" x2="146.182" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="184.364" y1="8" x2="184.364" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="114.909" x2="192" y2="114.909" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="94.545" x2="192" y2="94.545" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="74.182" x2="192" y2="74.182" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="53.818" x2="192" y2="53.818" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="33.455" x2="192" y2="33.455" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="13.091" x2="192" y2="13.091" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-axis" x1="24" y1="120" x2="192" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="31.636" y1="120" x2="31.636" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="31.636" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
+  <line class="sen-tick" x1="69.818" y1="120" x2="69.818" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="69.818" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0.5</text>
+  <line class="sen-tick" x1="108" y1="120" x2="108" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="108" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1</text>
+  <line class="sen-tick" x1="146.182" y1="120" x2="146.182" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="146.182" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1.5</text>
+  <line class="sen-tick" x1="184.364" y1="120" x2="184.364" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="184.364" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
+  <line class="sen-axis" x1="24" y1="8" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="20" y1="114.909" x2="24" y2="114.909" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="117.909" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0</text>
+  <line class="sen-tick" x1="20" y1="94.545" x2="24" y2="94.545" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="97.545" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.2</text>
+  <line class="sen-tick" x1="20" y1="74.182" x2="24" y2="74.182" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="77.182" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.4</text>
+  <line class="sen-tick" x1="20" y1="53.818" x2="24" y2="53.818" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="56.818" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.6</text>
+  <line class="sen-tick" x1="20" y1="33.455" x2="24" y2="33.455" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="36.455" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.8</text>
+  <line class="sen-tick" x1="20" y1="13.091" x2="24" y2="13.091" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="16.091" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1</text>
   <g clip-path="url(#sen-plot-area)">
-    <polyline points="31.636,114.909 108,13.091 184.364,114.909" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
+    <polyline class="sen-series-0" points="31.636,114.909 108,13.091 184.364,114.909" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
   </g>
 </svg>

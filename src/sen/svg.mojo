@@ -1,11 +1,11 @@
 """Deterministic SVG rendering for scientific figures."""
 
 from std.collections import List
-from std.math import floor, isfinite
+from std.math import floor, isfinite, log10
 
 from .layout import Margins, plot_area
-from .scale import LinearScale, linear_ticks, view_bounds
-from .series import DataBounds, Figure, LegendPosition
+from .scale import LinearScale, LogScale, linear_ticks, log_ticks, view_bounds
+from .series import AxisKind, DataBounds, Figure, LegendPosition
 from .style import LineStyle, MarkerStyle, _palette_color
 
 
@@ -52,6 +52,7 @@ struct _DrawCommand:
     var text: String
     var color: String
     var palette_slot: Int
+    var series_index: Int
     var line_width: Float64
     var line_style: LineStyle
     var marker_style: MarkerStyle
@@ -67,6 +68,7 @@ struct _DrawCommand:
         var text: String,
         var color: String,
         palette_slot: Int,
+        series_index: Int,
         line_width: Float64,
         line_style: LineStyle,
         marker_style: MarkerStyle,
@@ -80,6 +82,7 @@ struct _DrawCommand:
         self.text = text^
         self.color = color^
         self.palette_slot = palette_slot
+        self.series_index = series_index
         self.line_width = line_width
         self.line_style = line_style
         self.marker_style = marker_style
@@ -134,6 +137,7 @@ def _shape_command(
         String(),
         String(),
         -1,
+        -1,
         0.0,
         LineStyle.SOLID,
         MarkerStyle.NONE,
@@ -153,6 +157,7 @@ def _text_command(
         text^,
         String(),
         -1,
+        -1,
         0.0,
         LineStyle.SOLID,
         MarkerStyle.NONE,
@@ -162,6 +167,7 @@ def _text_command(
 def _polyline_command(
     var points: List[_PlanPoint],
     color: StringSlice,
+    series_index: Int,
     line_width: Float64,
     line_style: LineStyle,
 ) -> _DrawCommand:
@@ -175,6 +181,7 @@ def _polyline_command(
         String(),
         String(color),
         -1,
+        series_index,
         line_width,
         line_style,
         MarkerStyle.NONE,
@@ -186,6 +193,7 @@ def _marker_command(
     x: Float64,
     y: Float64,
     palette_slot: Int,
+    series_index: Int,
     marker_style: MarkerStyle,
 ) -> _DrawCommand:
     return _DrawCommand(
@@ -198,6 +206,7 @@ def _marker_command(
         String(),
         String(),
         palette_slot,
+        series_index,
         0.0,
         LineStyle.SOLID,
         marker_style,
@@ -223,6 +232,7 @@ def _styled_line_command(
         _empty_points(),
         String(),
         String(color),
+        -1,
         -1,
         line_width,
         line_style,
@@ -324,6 +334,14 @@ def _tick_label(value: Float64, step: Float64) raises -> String:
     return _format_decimal(value, decimals)
 
 
+def _diagnostic_value(value: Float64) raises -> String:
+    """Format diagnostic data through the existing decimal/scientific rules."""
+    var magnitude = abs(value)
+    if magnitude >= 1.0e9 or (magnitude > 0.0 and magnitude < 1.0e-9):
+        return _scientific_label(value)
+    return _format_decimal(value, 9)
+
+
 def _escape_xml(text: StringSlice) -> String:
     """Escape all five XML predefined entities while preserving Unicode."""
     var escaped = String()
@@ -356,6 +374,83 @@ def _tick_step(ticks: List[Float64], domain_span: Float64) -> Float64:
     return abs(domain_span)
 
 
+def _log_padded_domain(
+    lo: Float64, hi: Float64, axis_name: StringSlice
+) raises -> Tuple[Float64, Float64]:
+    """Pad a positive log domain by five percent in exponent space.
+
+    A constant domain receives exactly one decade on either side. Domains whose
+    requested padding cannot be represented as finite positive ``Float64``
+    endpoints are rejected with deterministic axis context.
+    """
+    var padded_lo = lo / 10.0
+    var padded_hi = hi * 10.0
+    if lo != hi:
+        var lo_exponent = log10(lo)
+        var hi_exponent = log10(hi)
+        var padding = 0.05 * (hi_exponent - lo_exponent)
+        padded_lo = pow(10.0, lo_exponent - padding)
+        padded_hi = pow(10.0, hi_exponent + padding)
+    if (
+        not isfinite(padded_lo)
+        or not isfinite(padded_hi)
+        or padded_lo <= 0.0
+        or padded_hi <= padded_lo
+    ):
+        raise Error("log-scale ", axis_name, " domain cannot be padded safely")
+    return (padded_lo, padded_hi)
+
+
+def _map_axis(
+    value: Float64,
+    domain_lo: Float64,
+    domain_hi: Float64,
+    range_start: Float64,
+    range_end: Float64,
+    kind: AxisKind,
+) -> Float64:
+    if kind == AxisKind.LOG10:
+        return LogScale._from_validated(
+            domain_lo, domain_hi, range_start, range_end
+        ).map(value)
+    return LinearScale._from_validated(
+        domain_lo, domain_hi, range_start, range_end
+    ).map(value)
+
+
+def _validate_log_series(figure: Figure, axis_name: StringSlice) raises:
+    """Reject the first non-positive series bound in insertion order."""
+    for order_index in range(figure._series_count()):
+        var series_index = figure._series_index(order_index)
+        var minimum: Float64
+        if figure._series_is_line(order_index):
+            ref line = figure.line(series_index)
+            if line.is_empty():
+                continue
+            var bounds = line.bounds()
+            minimum = bounds.x_min() if axis_name == "x" else bounds.y_min()
+        else:
+            ref scatter = figure.scatter(series_index)
+            if scatter.is_empty():
+                continue
+            var bounds = scatter.bounds()
+            minimum = bounds.x_min() if axis_name == "x" else bounds.y_min()
+        if minimum <= 0.0:
+            if axis_name == "x":
+                raise Error(
+                    "log-scale x domain requires positive values; series ",
+                    order_index,
+                    " has x_min = ",
+                    _diagnostic_value(minimum),
+                )
+            raise Error(
+                "log-scale y domain requires positive values; series ",
+                order_index,
+                " has y_min = ",
+                _diagnostic_value(minimum),
+            )
+
+
 def _lower_figure(
     figure: Figure, width: Float64, height: Float64, margins: Margins
 ) raises -> _RenderPlan:
@@ -375,6 +470,22 @@ def _lower_figure(
     var data_bounds = figure.bounds()
     var x_limits = figure.x_limits()
     var y_limits = figure.y_limits()
+    var x_axis_kind = figure.x_scale()
+    var y_axis_kind = figure.y_scale()
+    if x_axis_kind == AxisKind.LOG10:
+        if x_limits and x_limits.value()[0] <= 0.0:
+            raise Error(
+                "log-scale x domain requires positive values; explicit x limit lo = ",
+                _diagnostic_value(x_limits.value()[0]),
+            )
+        _validate_log_series(figure, "x")
+    if y_axis_kind == AxisKind.LOG10:
+        if y_limits and y_limits.value()[0] <= 0.0:
+            raise Error(
+                "log-scale y domain requires positive values; explicit y limit lo = ",
+                _diagnostic_value(y_limits.value()[0]),
+            )
+        _validate_log_series(figure, "y")
     var autoscale_x_min = data_bounds.x_min()
     var autoscale_x_max = data_bounds.x_max()
     if x_limits:
@@ -398,22 +509,22 @@ def _lower_figure(
     var y_domain = _padded_domain(bounds.y_min(), bounds.y_max(), "y")
     if x_limits:
         x_domain = x_limits.value()
+    elif x_axis_kind == AxisKind.LOG10:
+        x_domain = _log_padded_domain(data_bounds.x_min(), data_bounds.x_max(), "x")
     if y_limits:
         y_domain = y_limits.value()
-    var x_scale = LinearScale(
-        x_domain[0],
-        x_domain[1],
-        area.x(),
-        area.x() + area.width(),
-    )
-    var y_scale = LinearScale(
-        y_domain[0],
-        y_domain[1],
-        area.y() + area.height(),
-        area.y(),
-    )
-    var x_ticks = linear_ticks(x_domain[0], x_domain[1])
-    var y_ticks = linear_ticks(y_domain[0], y_domain[1])
+    elif y_axis_kind == AxisKind.LOG10:
+        y_domain = _log_padded_domain(data_bounds.y_min(), data_bounds.y_max(), "y")
+    var x_ticks: List[Float64]
+    var y_ticks: List[Float64]
+    if x_axis_kind == AxisKind.LOG10:
+        x_ticks = log_ticks(x_domain[0], x_domain[1])
+    else:
+        x_ticks = linear_ticks(x_domain[0], x_domain[1])
+    if y_axis_kind == AxisKind.LOG10:
+        y_ticks = log_ticks(y_domain[0], y_domain[1])
+    else:
+        y_ticks = linear_ticks(y_domain[0], y_domain[1])
     var x_step = _tick_step(x_ticks, x_domain[1] - x_domain[0])
     var y_step = _tick_step(y_ticks, y_domain[1] - y_domain[0])
 
@@ -431,10 +542,24 @@ def _lower_figure(
     var bottom = area.y() + area.height()
     if figure.grid_enabled():
         for tick in x_ticks:
-            var x = x_scale.map(tick)
+            var x = _map_axis(
+                tick,
+                x_domain[0],
+                x_domain[1],
+                area.x(),
+                area.x() + area.width(),
+                x_axis_kind,
+            )
             commands.append(_shape_command(_CommandKind.GRID, x, area.y(), x, bottom))
         for tick in y_ticks:
-            var y = y_scale.map(tick)
+            var y = _map_axis(
+                tick,
+                y_domain[0],
+                y_domain[1],
+                area.y() + area.height(),
+                area.y(),
+                y_axis_kind,
+            )
             commands.append(
                 _shape_command(
                     _CommandKind.GRID,
@@ -454,7 +579,14 @@ def _lower_figure(
         )
     )
     for tick in x_ticks:
-        var x = x_scale.map(tick)
+        var x = _map_axis(
+            tick,
+            x_domain[0],
+            x_domain[1],
+            area.x(),
+            area.x() + area.width(),
+            x_axis_kind,
+        )
         commands.append(_shape_command(_CommandKind.TICK, x, bottom, x, bottom + 4.0))
         commands.append(
             _text_command(
@@ -475,7 +607,14 @@ def _lower_figure(
         )
     )
     for tick in y_ticks:
-        var y = y_scale.map(tick)
+        var y = _map_axis(
+            tick,
+            y_domain[0],
+            y_domain[1],
+            area.y() + area.height(),
+            area.y(),
+            y_axis_kind,
+        )
         commands.append(
             _shape_command(
                 _CommandKind.TICK,
@@ -540,12 +679,30 @@ def _lower_figure(
                 for point_index in range(line.segment_point_count(segment_index)):
                     var point = line.segment_point(segment_index, point_index)
                     points.append(
-                        _PlanPoint(x_scale.map(point.x()), y_scale.map(point.y()))
+                        _PlanPoint(
+                            _map_axis(
+                                point.x(),
+                                x_domain[0],
+                                x_domain[1],
+                                area.x(),
+                                area.x() + area.width(),
+                                x_axis_kind,
+                            ),
+                            _map_axis(
+                                point.y(),
+                                y_domain[0],
+                                y_domain[1],
+                                area.y() + area.height(),
+                                area.y(),
+                                y_axis_kind,
+                            ),
+                        )
                     )
                 commands.append(
                     _polyline_command(
                         points^,
                         color,
+                        order_index,
                         style.line_width(),
                         style.line_style(),
                     )
@@ -557,9 +714,24 @@ def _lower_figure(
                 commands.append(
                     _marker_command(
                         _CommandKind.MARKER,
-                        x_scale.map(point.x()),
-                        y_scale.map(point.y()),
+                        _map_axis(
+                            point.x(),
+                            x_domain[0],
+                            x_domain[1],
+                            area.x(),
+                            area.x() + area.width(),
+                            x_axis_kind,
+                        ),
+                        _map_axis(
+                            point.y(),
+                            y_domain[0],
+                            y_domain[1],
+                            area.y() + area.height(),
+                            area.y(),
+                            y_axis_kind,
+                        ),
                         palette_slot,
+                        order_index,
                         style.marker_style(),
                     )
                 )
@@ -629,6 +801,7 @@ def _lower_figure(
                             glyph_x + 8.0,
                             center_y,
                             palette_slot,
+                            -1,
                             style.marker_style(),
                         )
                     )
@@ -652,13 +825,48 @@ def _lower_figure(
     )
 
 
+def _semantic_class(command: _DrawCommand) -> String:
+    """Return the stable semantic class derived only during SVG encoding."""
+    if command.kind._value == _CommandKind.BACKGROUND._value:
+        return String("sen-background")
+    if command.kind._value == _CommandKind.FRAME._value:
+        return String("sen-frame")
+    if command.kind._value == _CommandKind.AXIS._value:
+        return String("sen-axis")
+    if command.kind._value == _CommandKind.TICK._value:
+        return String("sen-tick")
+    if (
+        command.kind._value == _CommandKind.X_LABEL._value
+        or command.kind._value == _CommandKind.Y_LABEL._value
+    ):
+        return String("sen-tick-label")
+    if command.kind._value == _CommandKind.TITLE._value:
+        return String("sen-title")
+    if command.kind._value == _CommandKind.X_TITLE._value:
+        return String("sen-x-label")
+    if command.kind._value == _CommandKind.Y_TITLE._value:
+        return String("sen-y-label")
+    if command.kind._value == _CommandKind.GRID._value:
+        return String("sen-grid")
+    if (
+        command.kind._value == _CommandKind.SERIES._value
+        or command.kind._value == _CommandKind.MARKER._value
+    ):
+        return String("sen-series-") + String(command.series_index)
+    if command.kind._value == _CommandKind.LEGEND_BACKGROUND._value:
+        return String("sen-legend")
+    return String("sen-legend-item")
+
+
 def _append_rect(
     mut svg: String,
     command: _DrawCommand,
     fill: StringSlice,
     stroke: StringSlice,
 ) raises:
-    svg += '  <rect x="'
+    svg += '  <rect class="'
+    svg += _semantic_class(command)
+    svg += '" x="'
     svg += _format_svg_number(command.x1)
     svg += '" y="'
     svg += _format_svg_number(command.y1)
@@ -677,7 +885,9 @@ def _append_rect(
 
 
 def _append_line(mut svg: String, command: _DrawCommand) raises:
-    svg += '  <line x1="'
+    svg += '  <line class="'
+    svg += _semantic_class(command)
+    svg += '" x1="'
     svg += _format_svg_number(command.x1)
     svg += '" y1="'
     svg += _format_svg_number(command.y1)
@@ -692,7 +902,9 @@ def _append_line(mut svg: String, command: _DrawCommand) raises:
 
 
 def _append_styled_line(mut svg: String, command: _DrawCommand) raises:
-    svg += '  <line x1="'
+    svg += '  <line class="'
+    svg += _semantic_class(command)
+    svg += '" x1="'
     svg += _format_svg_number(command.x1)
     svg += '" y1="'
     svg += _format_svg_number(command.y1)
@@ -715,7 +927,9 @@ def _append_styled_line(mut svg: String, command: _DrawCommand) raises:
 
 
 def _append_text(mut svg: String, command: _DrawCommand) raises:
-    svg += '  <text x="'
+    svg += '  <text class="'
+    svg += _semantic_class(command)
+    svg += '" x="'
     svg += _format_svg_number(command.x1)
     svg += '" y="'
     svg += _format_svg_number(command.y1)
@@ -754,7 +968,9 @@ def _append_text(mut svg: String, command: _DrawCommand) raises:
 
 
 def _append_polyline(mut svg: String, command: _DrawCommand) raises:
-    svg += '    <polyline points="'
+    svg += '    <polyline class="'
+    svg += _semantic_class(command)
+    svg += '" points="'
     for index in range(len(command.points)):
         if index > 0:
             svg += " "
@@ -786,6 +1002,7 @@ def _append_polygon_point(
 def _append_marker_line(
     mut svg: String,
     indent: StringSlice,
+    css_class: StringSlice,
     x1: Float64,
     y1: Float64,
     x2: Float64,
@@ -793,7 +1010,9 @@ def _append_marker_line(
     color: StringSlice,
 ) raises:
     svg += indent
-    svg += '<line x1="'
+    svg += '<line class="'
+    svg += css_class
+    svg += '" x1="'
     svg += _format_svg_number(x1)
     svg += '" y1="'
     svg += _format_svg_number(y1)
@@ -814,10 +1033,13 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
     if command.kind._value == _CommandKind.LEGEND_MARKER._value:
         indent = String("  ")
     var color = _palette_color(command.palette_slot)
+    var css_class = _semantic_class(command)
     var marker = command.marker_style
     if marker == MarkerStyle.NONE or marker == MarkerStyle.CIRCLE:
         svg += indent
-        svg += '<circle cx="'
+        svg += '<circle class="'
+        svg += css_class
+        svg += '" cx="'
         svg += _format_svg_number(command.x1)
         svg += '" cy="'
         svg += _format_svg_number(command.y1)
@@ -828,7 +1050,9 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         svg += '"/>\n'
     elif marker == MarkerStyle.SQUARE:
         svg += indent
-        svg += '<rect x="'
+        svg += '<rect class="'
+        svg += css_class
+        svg += '" x="'
         svg += _format_svg_number(command.x1 - 2.5)
         svg += '" y="'
         svg += _format_svg_number(command.y1 - 2.5)
@@ -841,7 +1065,9 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         svg += '"/>\n'
     elif marker == MarkerStyle.TRIANGLE:
         svg += indent
-        svg += '<polygon points="'
+        svg += '<polygon class="'
+        svg += css_class
+        svg += '" points="'
         _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.5)
         svg += " "
         _append_polygon_point(svg, command.x1, command.y1, 2.5, 2.5)
@@ -852,7 +1078,9 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         svg += '"/>\n'
     elif marker == MarkerStyle.DIAMOND:
         svg += indent
-        svg += '<polygon points="'
+        svg += '<polygon class="'
+        svg += css_class
+        svg += '" points="'
         _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.5)
         svg += " "
         _append_polygon_point(svg, command.x1, command.y1, 2.5, 0.0)
@@ -867,6 +1095,7 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         _append_marker_line(
             svg,
             indent,
+            css_class,
             command.x1 - 2.5,
             command.y1,
             command.x1 + 2.5,
@@ -876,6 +1105,7 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         _append_marker_line(
             svg,
             indent,
+            css_class,
             command.x1,
             command.y1 - 2.5,
             command.x1,
@@ -886,6 +1116,7 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         _append_marker_line(
             svg,
             indent,
+            css_class,
             command.x1 - 2.5,
             command.y1 - 2.5,
             command.x1 + 2.5,
@@ -895,6 +1126,7 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         _append_marker_line(
             svg,
             indent,
+            css_class,
             command.x1 - 2.5,
             command.y1 + 2.5,
             command.x1 + 2.5,
@@ -903,7 +1135,9 @@ def _append_marker(mut svg: String, command: _DrawCommand) raises:
         )
     else:
         svg += indent
-        svg += '<polygon points="'
+        svg += '<polygon class="'
+        svg += css_class
+        svg += '" points="'
         # Five-point star offsets are exact Float64 literals: outer radius 2.9,
         # inner radius 1.1, with the first vertex pointing upward.
         _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.9)
@@ -1011,7 +1245,13 @@ def render_svg(
     Empty figures are rejected. Nonconstant data bounds receive a five-percent
     margin on each side; each remaining constant axis is padded by the larger of
     0.5 or five percent of the constant's magnitude before ticks and scales are
-    built. Explicit axis limits replace those rules exactly on their own axis.
+    built. A logarithmic axis instead receives five-percent padding in base-10
+    exponent space, while a constant logarithmic domain receives one decade on
+    either side. Logarithmic rendering rejects a non-positive explicit lower
+    limit or the first non-positive per-series minimum in insertion order, with
+    axis, series, and value context. Explicit axis limits replace autoscale rules
+    exactly on their own axis. Invalid figure sizes or margins and any unsafe
+    derived domain also raise before encoding.
     Automatic palette slots are resolved while walking insertion order; only
     automatic series advance the counter, which starts at zero and cycles modulo
     six. Legend rows are 14 units high with five-unit vertical padding; width is
@@ -1023,8 +1263,10 @@ def render_svg(
     Geometry uses fixed-point formatting with at most three fractional digits,
     half-away-from-zero rounding, stripped trailing zeros, normalized negative
     zero, and no exponent notation. The hand-written encoder emits a fixed
-    element order and fixed left-to-right attribute order. The returned document
-    ends with exactly one newline after ``</svg>``.
+    element order and fixed left-to-right attribute order. Every drawing element
+    receives its stable semantic ``sen-*`` class as the first attribute while
+    retaining inline presentation attributes. The returned document ends with
+    exactly one newline after ``</svg>``.
     """
     return _encode_svg(_lower_figure(figure, width, height, margins))
 
@@ -1043,6 +1285,6 @@ def render_svg(
 
 
 def save_svg(path: StringSlice, svg: StringSlice) raises:
-    """Write a previously rendered SVG string to ``path`` exactly as supplied."""
+    """Write SVG bytes exactly as supplied, propagating deterministic I/O errors."""
     with open(path, "w") as output:
         output.write(svg)

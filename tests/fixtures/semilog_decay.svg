@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140" viewBox="0 0 200 140">
+  <defs>
+    <clipPath id="sen-plot-area">
+      <rect x="24" y="8" width="168" height="112"/>
+    </clipPath>
+  </defs>
+  <rect class="sen-background" x="0" y="0" width="200" height="140" fill="#ffffff"/>
+  <rect class="sen-frame" x="24" y="8" width="168" height="112" fill="none" stroke="#d0d0d0" stroke-width="1"/>
+  <line class="sen-grid" x1="31.636" y1="8" x2="31.636" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="69.818" y1="8" x2="69.818" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="108" y1="8" x2="108" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="146.182" y1="8" x2="146.182" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="184.364" y1="8" x2="184.364" y2="120" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="114.909" x2="192" y2="114.909" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="89.455" x2="192" y2="89.455" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="64" x2="192" y2="64" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="38.545" x2="192" y2="38.545" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-grid" x1="24" y1="13.091" x2="192" y2="13.091" stroke="#e0e0e0" stroke-width="1"/>
+  <line class="sen-axis" x1="24" y1="120" x2="192" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="31.636" y1="120" x2="31.636" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="31.636" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
+  <line class="sen-tick" x1="69.818" y1="120" x2="69.818" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="69.818" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1</text>
+  <line class="sen-tick" x1="108" y1="120" x2="108" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="108" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
+  <line class="sen-tick" x1="146.182" y1="120" x2="146.182" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="146.182" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">3</text>
+  <line class="sen-tick" x1="184.364" y1="120" x2="184.364" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="184.364" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">4</text>
+  <line class="sen-axis" x1="24" y1="8" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="20" y1="114.909" x2="24" y2="114.909" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="117.909" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.1</text>
+  <line class="sen-tick" x1="20" y1="89.455" x2="24" y2="89.455" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="92.455" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1</text>
+  <line class="sen-tick" x1="20" y1="64" x2="24" y2="64" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="67" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">10</text>
+  <line class="sen-tick" x1="20" y1="38.545" x2="24" y2="38.545" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="41.545" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">100</text>
+  <line class="sen-tick" x1="20" y1="13.091" x2="24" y2="13.091" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="16.091" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1000</text>
+  <g clip-path="url(#sen-plot-area)">
+    <polyline class="sen-series-0" points="31.636,13.091 69.818,38.545 108,64 146.182,89.455 184.364,114.909" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
+  </g>
+</svg>

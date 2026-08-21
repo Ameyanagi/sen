@@ -1,4 +1,12 @@
-from sen import DataBounds, LinearScale, StickyEdges, linear_ticks, view_bounds
+from sen import (
+    DataBounds,
+    LinearScale,
+    LogScale,
+    StickyEdges,
+    linear_ticks,
+    log_ticks,
+    view_bounds,
+)
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
@@ -56,6 +64,7 @@ def test_linear_scale_batch_matches_scalar_mapping() raises:
     var short_output: List[Float64] = [0.0]
     with assert_raises(contains="output buffer length must match input length"):
         scale.map_all(values, short_output)
+    assert_true(short_output[0] == 0.0)
 
 
 def test_linear_scale_rejects_invalid_construction() raises:
@@ -87,6 +96,55 @@ def test_degenerate_range_maps_but_cannot_be_inverted() raises:
     var scale = LinearScale(0.0, 1.0, 4.0, 4.0)
     assert_true(scale.map(0.5) == 4.0)
     with assert_raises(contains="degenerate linear scale range cannot be inverted"):
+        _ = scale.invert(4.0)
+
+
+def test_log_scale_preserves_endpoints_and_maps_log_midpoint() raises:
+    var scale = LogScale(1.0, 100.0, 10.0, 30.0)
+
+    assert_true(scale.map(scale.domain_start()) == scale.range_start())
+    assert_true(scale.map(scale.domain_end()) == scale.range_end())
+    assert_true(scale.map(10.0) == 20.0)
+    assert_true(scale == LogScale(1.0, 100.0, 10.0, 30.0))
+
+
+def test_log_scale_round_trip_and_batch_contract() raises:
+    var scale = LogScale(0.1, 1000.0, 420.0, -80.0)
+    var values: List[Float64] = [0.1, 1.0, 10.0, 100.0, 1000.0]
+    var output: List[Float64] = [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    scale.map_all(values, output)
+    for index in range(len(values)):
+        assert_true(output[index] == scale.map(values[index]))
+        assert_true(abs(scale.invert(output[index]) - values[index]) <= 1.0e-10)
+
+    var short_output: List[Float64] = [0.0]
+    with assert_raises(contains="output buffer length must match input length"):
+        scale.map_all(values, short_output)
+    assert_true(short_output[0] == 0.0)
+
+
+def test_log_scale_rejects_invalid_domain_endpoints_with_values() raises:
+    with assert_raises(contains="got 0"):
+        _ = LogScale(0.0, 1.0, 0.0, 1.0)
+    with assert_raises(contains="got -2"):
+        _ = LogScale(1.0, -2.0, 0.0, 1.0)
+    with assert_raises(contains="got inf"):
+        _ = LogScale(Float64("inf"), 1.0, 0.0, 1.0)
+    with assert_raises(contains="got nan"):
+        _ = LogScale(1.0, Float64("nan"), 0.0, 1.0)
+    with assert_raises(contains="got nan"):
+        _ = LogScale(1.0, 10.0, Float64("nan"), 1.0)
+    with assert_raises(contains="got inf"):
+        _ = LogScale(1.0, 10.0, 0.0, Float64("inf"))
+    with assert_raises(contains="domain must not be degenerate"):
+        _ = LogScale(2.0, 2.0, 0.0, 1.0)
+
+
+def test_log_scale_degenerate_range_cannot_be_inverted() raises:
+    var scale = LogScale(1.0, 100.0, 4.0, 4.0)
+    assert_true(scale.map(10.0) == 4.0)
+    with assert_raises(contains="degenerate log scale range cannot be inverted"):
         _ = scale.invert(4.0)
 
 
@@ -214,6 +272,37 @@ def test_linear_ticks_reject_invalid_inputs() raises:
         _ = linear_ticks(1.0, 1.0)
     with assert_raises(contains="tick target count must be at least two"):
         _ = linear_ticks(0.0, 1.0, target_count=1)
+
+
+def test_log_ticks_emit_decades_in_increasing_order() raises:
+    var actual = log_ticks(0.1, 1000.0)
+    var expected: List[Float64] = [0.1, 1.0, 10.0, 100.0, 1000.0]
+    assert_tick_sequence(actual, expected)
+
+
+def test_log_ticks_sub_decade_falls_back_to_linear_125_ticks() raises:
+    var actual = log_ticks(2.0, 8.0)
+    var expected: List[Float64] = [2.0, 4.0, 6.0, 8.0]
+    assert_tick_sequence(actual, expected)
+
+
+def test_log_ticks_normalize_reversed_domains_deterministically() raises:
+    var forward = log_ticks(0.1, 1000.0)
+    var reversed = log_ticks(1000.0, 0.1)
+    assert_tick_sequence(reversed, forward)
+
+
+def test_log_ticks_reject_invalid_domains_with_values() raises:
+    with assert_raises(contains="got 0"):
+        _ = log_ticks(0.0, 10.0)
+    with assert_raises(contains="got -1"):
+        _ = log_ticks(1.0, -1.0)
+    with assert_raises(contains="got inf"):
+        _ = log_ticks(Float64("inf"), 10.0)
+    with assert_raises(contains="got nan"):
+        _ = log_ticks(1.0, Float64("nan"))
+    with assert_raises(contains="domain must not be degenerate"):
+        _ = log_ticks(10.0, 10.0)
 
 
 def main() raises:

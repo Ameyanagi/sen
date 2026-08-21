@@ -1,4 +1,5 @@
 from sen import (
+    AxisKind,
     Figure,
     LegendPosition,
     LineSeries,
@@ -153,6 +154,16 @@ def limits_figure() raises -> Figure:
     return figure^
 
 
+def semilog_decay_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0, 3.0, 4.0]
+    var ys: List[Float64] = [1000.0, 100.0, 10.0, 1.0, 0.1]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_y_scale(AxisKind.LOG10)
+    figure.set_grid(True)
+    return figure^
+
+
 def read_fixture(path: StringSlice) raises -> String:
     with open(path, "r") as fixture:
         return fixture.read()
@@ -245,6 +256,68 @@ def test_limits_golden_fixture_is_byte_exact() raises:
     assert_equal(actual, read_fixture("tests/fixtures/limits.svg"))
 
 
+def test_semilog_decay_golden_fixture_is_byte_exact() raises:
+    var figure = semilog_decay_figure()
+    var actual = render_svg(figure, 200.0, 140.0, fixture_margins())
+    assert_equal(actual, read_fixture("tests/fixtures/semilog_decay.svg"))
+
+
+def test_log_axis_reports_series_and_offending_bound() raises:
+    var positive_xs: List[Float64] = [1.0, 2.0]
+    var negative_xs: List[Float64] = [-0.2, 3.0]
+    var ys: List[Float64] = [1.0, 2.0]
+    var figure = Figure()
+    figure.line(positive_xs, ys)
+    figure.scatter(negative_xs, ys)
+    figure.set_x_scale(AxisKind.LOG10)
+
+    with assert_raises(
+        contains=(
+            "log-scale x domain requires positive values; series 1 has x_min = -0.2"
+        )
+    ):
+        _ = render_svg(figure, 200.0, 140.0, fixture_margins())
+
+
+def test_log_axis_reports_nonpositive_explicit_limit() raises:
+    var xs: List[Float64] = [1.0, 10.0]
+    var ys: List[Float64] = [1.0, 2.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_x_scale(AxisKind.LOG10)
+    figure.set_x_limits(0.0, 10.0)
+
+    with assert_raises(
+        contains="log-scale x domain requires positive values; explicit x limit lo = 0"
+    ):
+        _ = render_svg(figure, 200.0, 140.0, fixture_margins())
+
+
+def test_semantic_css_classes_are_first_attributes() raises:
+    var figure = legend_figure()
+    figure.set_title("classes")
+    figure.set_x_label("x")
+    figure.set_y_label("y")
+    figure.set_grid(True)
+    var svg = render_svg(figure, 240.0, 140.0, fixture_margins())
+
+    assert_true(count_occurrences(svg, '<rect class="sen-background" ') > 0)
+    assert_true(count_occurrences(svg, '<rect class="sen-frame" ') > 0)
+    assert_true(count_occurrences(svg, '<line class="sen-axis" ') > 0)
+    assert_true(count_occurrences(svg, '<line class="sen-tick" ') > 0)
+    assert_true(count_occurrences(svg, '<text class="sen-tick-label" ') > 0)
+    assert_true(count_occurrences(svg, '<text class="sen-title" ') > 0)
+    assert_true(count_occurrences(svg, '<text class="sen-x-label" ') > 0)
+    assert_true(count_occurrences(svg, '<text class="sen-y-label" ') > 0)
+    assert_true(count_occurrences(svg, '<line class="sen-grid" ') > 0)
+    assert_true(count_occurrences(svg, '<polyline class="sen-series-0" ') > 0)
+    assert_true(count_occurrences(svg, '<polyline class="sen-series-1" ') > 0)
+    assert_true(count_occurrences(svg, '<rect class="sen-series-2" ') > 0)
+    assert_true(count_occurrences(svg, '<rect class="sen-legend" ') > 0)
+    assert_true(count_occurrences(svg, '<line class="sen-legend-item" ') > 0)
+    assert_true(count_occurrences(svg, '<text class="sen-legend-item" ') > 0)
+
+
 def test_xml_escape_covers_predefined_entities_and_unicode() raises:
     assert_equal(
         _escape_xml("A&B <tag> \"quote\" 'apostrophe' 雪"),
@@ -312,6 +385,17 @@ def test_constant_domains_use_documented_padding() raises:
     assert_equal(count_occurrences(svg, 'points="68,34"'), 1)
 
 
+def test_constant_log_domain_pads_one_decade_on_each_side() raises:
+    var xs: List[Float64] = [2.0]
+    var ys: List[Float64] = [10.0]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_y_scale(AxisKind.LOG10)
+    var svg = render_svg(figure, 120.0, 80.0, fixture_margins())
+
+    assert_equal(count_occurrences(svg, 'points="68,34"'), 1)
+
+
 def test_every_marker_shape_uses_its_fixed_svg_element() raises:
     var figure = markers_figure()
     var svg = render_svg(figure, 240.0, 140.0, fixture_margins())
@@ -364,28 +448,40 @@ def test_legend_positions_use_the_requested_plot_corner() raises:
 
     var upper_right = render_svg(figure, 200.0, 140.0, fixture_margins())
     assert_equal(
-        count_occurrences(upper_right, '<rect x="146" y="16" width="38" height="24"'),
+        count_occurrences(
+            upper_right,
+            '<rect class="sen-legend" x="146" y="16" width="38" height="24"',
+        ),
         1,
     )
 
     figure.set_legend(LegendPosition.UPPER_LEFT)
     var upper_left = render_svg(figure, 200.0, 140.0, fixture_margins())
     assert_equal(
-        count_occurrences(upper_left, '<rect x="32" y="16" width="38" height="24"'),
+        count_occurrences(
+            upper_left,
+            '<rect class="sen-legend" x="32" y="16" width="38" height="24"',
+        ),
         1,
     )
 
     figure.set_legend(LegendPosition.LOWER_LEFT)
     var lower_left = render_svg(figure, 200.0, 140.0, fixture_margins())
     assert_equal(
-        count_occurrences(lower_left, '<rect x="32" y="88" width="38" height="24"'),
+        count_occurrences(
+            lower_left,
+            '<rect class="sen-legend" x="32" y="88" width="38" height="24"',
+        ),
         1,
     )
 
     figure.set_legend(LegendPosition.LOWER_RIGHT)
     var lower_right = render_svg(figure, 200.0, 140.0, fixture_margins())
     assert_equal(
-        count_occurrences(lower_right, '<rect x="146" y="88" width="38" height="24"'),
+        count_occurrences(
+            lower_right,
+            '<rect class="sen-legend" x="146" y="88" width="38" height="24"',
+        ),
         1,
     )
 
@@ -425,8 +521,19 @@ def test_explicit_limits_define_exact_ticks_and_clipped_geometry() raises:
     var svg = render_svg(figure, 200.0, 140.0, fixture_margins())
 
     assert_equal(count_occurrences(svg, 'points="-60,176 24,120 192,8 276,-48"'), 1)
-    assert_equal(count_occurrences(svg, '<line x1="24" y1="120" x2="24" y2="124"'), 1)
-    assert_equal(count_occurrences(svg, '<line x1="192" y1="120" x2="192" y2="124"'), 1)
+    assert_equal(
+        count_occurrences(
+            svg, '<line class="sen-tick" x1="24" y1="120" x2="24" y2="124"'
+        ),
+        1,
+    )
+    assert_equal(
+        count_occurrences(
+            svg,
+            '<line class="sen-tick" x1="192" y1="120" x2="192" y2="124"',
+        ),
+        1,
+    )
     assert_equal(count_occurrences(svg, '<clipPath id="sen-plot-area">'), 1)
     assert_equal(count_occurrences(svg, '<g clip-path="url(#sen-plot-area)">'), 1)
 

@@ -1,4 +1,5 @@
 from sen import (
+    AxisKind,
     DataBounds,
     Figure,
     LegendPosition,
@@ -692,6 +693,19 @@ def test_figure_legend_and_grid_defaults_and_setters() raises:
 
     assert_true(figure.legend_position() == LegendPosition.LOWER_LEFT)
     assert_true(figure.grid_enabled())
+
+
+def test_figure_axis_scale_defaults_and_setters_round_trip() raises:
+    var figure = Figure()
+
+    assert_true(figure.x_scale() == AxisKind.LINEAR)
+    assert_true(figure.y_scale() == AxisKind.LINEAR)
+
+    figure.set_x_scale(AxisKind.LOG10)
+    figure.set_y_scale(AxisKind.LOG10)
+
+    assert_true(figure.x_scale() == AxisKind.LOG10)
+    assert_true(figure.y_scale() == AxisKind.LOG10)
 
 
 def test_figure_axis_limits_validate_and_round_trip() raises:

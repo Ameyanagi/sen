@@ -18,6 +18,9 @@ struct MissingPolicy(Copyable, Equatable, ImplicitlyCopyable):
     the first missing observation, ``SEGMENT`` turns missing runs into line gaps,
     and ``DROP`` skips missing observations without creating gaps. NaNs are never
     stored, and non-NaN non-finite coordinates are invalid under every policy.
+    The nominal constants and equality are non-raising; ingestion always scans
+    from index zero and therefore reports or transforms missing data
+    deterministically.
     """
 
     var _value: Int
@@ -27,9 +30,11 @@ struct MissingPolicy(Copyable, Equatable, ImplicitlyCopyable):
     comptime DROP = MissingPolicy(_value=2)
 
     def __init__(out self, *, _value: Int):
+        """Construct a policy discriminant for library-defined constants."""
         self._value = _value
 
     def __eq__(self, other: Self) -> Bool:
+        """Return deterministic discriminant equality without raising."""
         return self._value == other._value
 
 
@@ -405,7 +410,9 @@ struct ScatterSeries(Copyable):
     Construction and mutation establish equal-length finite coordinate buffers,
     and public reads trust them thereafter. Direct mutation of underscore-prefixed
     storage is out of contract; call ``validate`` explicitly when a checkpoint is
-    needed.
+    needed. Bulk construction and mutation reject unequal lengths or non-finite
+    coordinates before storing them. Point order and bounds traversal are
+    deterministic.
     """
 
     var _xs: List[Float64]
@@ -428,7 +435,7 @@ struct ScatterSeries(Copyable):
 
     @staticmethod
     def from_xy(x: Span[Float64, ...], y: Span[Float64, ...]) raises -> Self:
-        """Build a marker series from equal-length finite coordinate spans."""
+        """Build markers in input order; reject unequal lengths or non-finite data."""
         if len(x) != len(y):
             raise Error("x and y coordinate sequences must have equal length")
         var xs = List[Float64](capacity=len(x))
@@ -482,13 +489,13 @@ struct ScatterSeries(Copyable):
         return Self(xs^, ys^, _validated=_Validated())
 
     def append(mut self, point: PlotPoint) raises:
-        """Append one validated point."""
+        """Append deterministically after explicit point validation may raise."""
         point.validate()
         self._xs.append(point._x)
         self._ys.append(point._y)
 
     def validate(self) raises:
-        """Validate coordinate buffers explicitly."""
+        """Validate equal lengths then finite coordinates in stable index order."""
         if len(self._xs) != len(self._ys):
             raise Error("scatter-series coordinate buffers must have equal length")
         for index in range(len(self._xs)):
@@ -496,19 +503,21 @@ struct ScatterSeries(Copyable):
                 raise Error("plot coordinates must be finite")
 
     def point_count(self) -> Int:
+        """Return the deterministic marker count without raising."""
         return len(self._xs)
 
     def is_empty(self) -> Bool:
+        """Return whether no markers are stored; this never raises."""
         return len(self._xs) == 0
 
     def point(self, index: Int) raises -> PlotPoint:
-        """Return a point by position, rejecting indices outside the series."""
+        """Return the exact point by position; reject an out-of-range index."""
         if index < 0 or index >= len(self._xs):
             raise Error("scatter-series point index is out of bounds")
         return PlotPoint._from_validated(self._xs[index], self._ys[index])
 
     def bounds(self) raises -> DataBounds:
-        """Return the trusted extent, rejecting an empty series."""
+        """Return deterministic index-order bounds, rejecting an empty series."""
         if self.is_empty():
             raise Error("empty scatter-series has no data bounds")
         var x_min = self._xs[0]
@@ -542,8 +551,34 @@ struct _SeriesOrder(Copyable, ImplicitlyCopyable):
         self.index = index
 
 
+struct AxisKind(Copyable, Equatable, ImplicitlyCopyable):
+    """Select deterministic linear or base-10 logarithmic axis semantics.
+
+    Setters accepting this nominal value are non-raising. A logarithmic axis
+    validates positive data and explicit limits only when rendering, where the
+    effective domain and insertion-order series context are available.
+    """
+
+    var _value: Int
+
+    comptime LINEAR = AxisKind(_value=0)
+    comptime LOG10 = AxisKind(_value=1)
+
+    def __init__(out self, *, _value: Int):
+        """Construct an axis discriminant for library-defined constants."""
+        self._value = _value
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return whether both values select the same axis transform."""
+        return self._value == other._value
+
+
 struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
-    """A nominal in-plot legend position; ``NONE`` suppresses the legend."""
+    """A deterministic nominal legend position; ``NONE`` suppresses rendering.
+
+    Constants, construction, and equality are non-raising. A visible legend is
+    still emitted only when at least one series label is nonempty.
+    """
 
     var _value: Int
 
@@ -554,9 +589,11 @@ struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
     comptime NONE = LegendPosition(_value=4)
 
     def __init__(out self, *, _value: Int):
+        """Construct a position discriminant for library-defined constants."""
         self._value = _value
 
     def __eq__(self, other: Self) -> Bool:
+        """Return deterministic discriminant equality without raising."""
         return self._value == other._value
 
 
@@ -568,7 +605,10 @@ struct Figure(Copyable):
     validates and builds new series before insertion. Constructed series are
     trusted on insertion and public operations trust them thereafter. Direct
     mutation of underscore-prefixed storage is out of contract; call ``validate``
-    explicitly when a checkpoint is needed.
+    explicitly when a checkpoint is needed. All stored ordering, palette,
+    legend, axis, and grid state is consumed deterministically by renderers;
+    fallible ingestion, limits, lookup, bounds, validation, rendering, and I/O
+    methods document their rejection conditions.
     """
 
     var _lines: List[LineSeries]
@@ -583,6 +623,8 @@ struct Figure(Copyable):
     var _y_label: String
     var _legend_position: LegendPosition
     var _grid_enabled: Bool
+    var _x_scale: AxisKind
+    var _y_scale: AxisKind
     var _has_x_limits: Bool
     var _x_limit_lo: Float64
     var _x_limit_hi: Float64
@@ -591,6 +633,7 @@ struct Figure(Copyable):
     var _y_limit_hi: Float64
 
     def __init__(out self):
+        """Construct deterministic empty linear-axis defaults without raising."""
         self._lines = List[LineSeries]()
         self._line_labels = List[String]()
         self._line_styles = List[SeriesStyle]()
@@ -603,6 +646,8 @@ struct Figure(Copyable):
         self._y_label = String()
         self._legend_position = LegendPosition.UPPER_RIGHT
         self._grid_enabled = False
+        self._x_scale = AxisKind.LINEAR
+        self._y_scale = AxisKind.LINEAR
         self._has_x_limits = False
         self._x_limit_lo = 0.0
         self._x_limit_hi = 1.0
@@ -632,13 +677,13 @@ struct Figure(Copyable):
         self._order.append(_SeriesOrder(_SeriesKind.SCATTER, index))
 
     def add_line(mut self, var line: LineSeries, style: SeriesStyle = SeriesStyle()):
-        """Take ownership of a prebuilt line with an empty label and ``style``."""
+        """Take ownership in insertion order without validation or raising."""
         self._insert_line(line^, String(), style)
 
     def add_scatter(
         mut self, var scatter: ScatterSeries, style: SeriesStyle = SeriesStyle()
     ):
-        """Take ownership of prebuilt markers with an empty label and ``style``."""
+        """Take ownership in insertion order without validation or raising."""
         self._insert_scatter(scatter^, String(), style)
 
     def line(
@@ -650,7 +695,12 @@ struct Figure(Copyable):
         style: SeriesStyle = SeriesStyle(),
         missing: MissingPolicy = MissingPolicy.ERROR,
     ) raises:
-        """Build and insert a line series using the requested missing-data policy."""
+        """Build and insert a line deterministically from index zero.
+
+        Raises before insertion for unequal lengths, non-NaN infinities, or the
+        first NaN under ``MissingPolicy.ERROR``. ``SEGMENT`` creates deterministic
+        gaps and ``DROP`` joins the remaining finite points.
+        """
         var series = LineSeries._from_xy_missing(x, y, missing)
         self._insert_line(series^, label^, style)
 
@@ -668,33 +718,43 @@ struct Figure(Copyable):
         Because disconnected topology has no meaning for markers, ``SEGMENT``
         behaves identically to ``DROP``. ``ERROR`` still rejects the first NaN.
         A ``MarkerStyle.NONE`` style falls back to ``CIRCLE`` at render time so
-        the marker-only series remains visible.
+        the marker-only series remains visible. Unequal lengths and non-NaN
+        infinities raise before insertion; accepted markers preserve input order
+        deterministically.
         """
         var series = ScatterSeries._from_xy_missing(x, y, missing)
         self._insert_scatter(series^, label^, style)
 
     def set_title(mut self, var title: String):
-        """Set arbitrary title text; no input validation is required."""
+        """Set title text exactly and deterministically without raising."""
         self._title = title^
 
     def set_x_label(mut self, var label: String):
-        """Set arbitrary x-axis label text; no input validation is required."""
+        """Set x-axis label text exactly and deterministically without raising."""
         self._x_label = label^
 
     def set_y_label(mut self, var label: String):
-        """Set arbitrary y-axis label text; no input validation is required."""
+        """Set y-axis label text exactly and deterministically without raising."""
         self._y_label = label^
 
     def set_legend(mut self, position: LegendPosition):
-        """Place the automatically triggered legend or suppress it with ``NONE``."""
+        """Set deterministic legend placement without validation or raising."""
         self._legend_position = position
 
     def set_grid(mut self, enabled: Bool):
-        """Enable or disable major gridlines."""
+        """Enable or disable deterministic major gridlines without raising."""
         self._grid_enabled = enabled
 
+    def set_x_scale(mut self, scale: AxisKind):
+        """Select x mapping without raising; LOG10 positivity is render-checked."""
+        self._x_scale = scale
+
+    def set_y_scale(mut self, scale: AxisKind):
+        """Select y mapping without raising; LOG10 positivity is render-checked."""
+        self._y_scale = scale
+
     def set_x_limits(mut self, lo: Float64, hi: Float64) raises:
-        """Set an exact finite increasing x-axis domain override."""
+        """Set an exact deterministic x domain; reject non-finite or lo >= hi."""
         if not isfinite(lo) or not isfinite(hi):
             raise Error("x limits must be finite; got lo = ", lo, ", hi = ", hi)
         if lo >= hi:
@@ -704,7 +764,7 @@ struct Figure(Copyable):
         self._x_limit_hi = hi
 
     def set_y_limits(mut self, lo: Float64, hi: Float64) raises:
-        """Set an exact finite increasing y-axis domain override."""
+        """Set an exact deterministic y domain; reject non-finite or lo >= hi."""
         if not isfinite(lo) or not isfinite(hi):
             raise Error("y limits must be finite; got lo = ", lo, ", hi = ", hi)
         if lo >= hi:
@@ -714,34 +774,47 @@ struct Figure(Copyable):
         self._y_limit_hi = hi
 
     def title(self) -> ref[self._title] String:
+        """Return the exact stored title by read reference without raising."""
         return self._title
 
     def x_label(self) -> ref[self._x_label] String:
+        """Return the exact stored x label by read reference without raising."""
         return self._x_label
 
     def y_label(self) -> ref[self._y_label] String:
+        """Return the exact stored y label by read reference without raising."""
         return self._y_label
 
     def legend_position(self) -> LegendPosition:
+        """Return deterministic legend placement without raising."""
         return self._legend_position
 
     def grid_enabled(self) -> Bool:
+        """Return the stored major-grid flag without raising."""
         return self._grid_enabled
 
+    def x_scale(self) -> AxisKind:
+        """Return the x-axis transform selection without data validation."""
+        return self._x_scale
+
+    def y_scale(self) -> AxisKind:
+        """Return the y-axis transform selection without data validation."""
+        return self._y_scale
+
     def x_limits(self) -> Optional[Tuple[Float64, Float64]]:
-        """Return the exact x-domain override, or absence when autoscaling."""
+        """Return the exact x override or deterministic absence without raising."""
         if self._has_x_limits:
             return (self._x_limit_lo, self._x_limit_hi)
         return None
 
     def y_limits(self) -> Optional[Tuple[Float64, Float64]]:
-        """Return the exact y-domain override, or absence when autoscaling."""
+        """Return the exact y override or deterministic absence without raising."""
         if self._has_y_limits:
             return (self._y_limit_lo, self._y_limit_hi)
         return None
 
     def validate(self) raises:
-        """Validate stored series and insertion-order metadata explicitly."""
+        """Validate all stored invariants in deterministic field and index order."""
         if self._has_x_limits:
             if not isfinite(self._x_limit_lo) or not isfinite(self._x_limit_hi):
                 raise Error(
@@ -815,19 +888,23 @@ struct Figure(Copyable):
                 raise Error("figure series order contains an unknown kind")
 
     def is_empty(self) -> Bool:
+        """Return whether no series are stored; this check never raises."""
         return len(self._lines) == 0 and len(self._scatters) == 0
 
     def line_count(self) -> Int:
+        """Return the deterministic stored line count without raising."""
         return len(self._lines)
 
     def scatter_count(self) -> Int:
+        """Return the deterministic stored scatter count without raising."""
         return len(self._scatters)
 
     def bounds(self) raises -> DataBounds:
         """Return combined bounds for every nonempty line and scatter series.
 
         Empty series do not contribute an extent. A figure with no stored points
-        has no data domain and is rejected.
+        has no data domain and is rejected. Bounds are combined in stable
+        line-then-scatter storage order.
         """
         var combined: Optional[DataBounds] = None
         for index in range(len(self._lines)):
@@ -863,19 +940,19 @@ struct Figure(Copyable):
         return combined.value()
 
     def line(self, index: Int) raises -> ref[self._lines[index]] LineSeries:
-        """Return a read reference to a line series by position."""
+        """Return a stable read reference; reject an out-of-range line index."""
         if index < 0 or index >= len(self._lines):
             raise Error("figure line index is out of bounds")
         return self._lines[index]
 
     def scatter(self, index: Int) raises -> ref[self._scatters[index]] ScatterSeries:
-        """Return a read reference to a scatter series by position."""
+        """Return a stable read reference; reject an out-of-range scatter index."""
         if index < 0 or index >= len(self._scatters):
             raise Error("figure scatter index is out of bounds")
         return self._scatters[index]
 
     def line_label(self, index: Int) raises -> ref[self._line_labels[index]] String:
-        """Return the label for a line-series position."""
+        """Return the exact label; reject an out-of-range line position."""
         if index < 0 or index >= len(self._line_labels):
             raise Error("figure line-label index is out of bounds")
         return self._line_labels[index]
@@ -883,7 +960,7 @@ struct Figure(Copyable):
     def scatter_label(
         self, index: Int
     ) raises -> ref[self._scatter_labels[index]] String:
-        """Return the label for a scatter-series position."""
+        """Return the exact label; reject an out-of-range scatter position."""
         if index < 0 or index >= len(self._scatter_labels):
             raise Error("figure scatter-label index is out of bounds")
         return self._scatter_labels[index]
@@ -910,7 +987,10 @@ struct Figure(Copyable):
         return self._scatter_labels[entry.index].copy()
 
     def save_svg(self, path: StringSlice) raises:
-        """Render at 640 by 480 with default margins and save to ``path``."""
+        """Render default geometry and save it deterministically.
+
+        Rendering and I/O errors propagate to the caller.
+        """
         from .svg import render_svg, save_svg
 
         var svg = render_svg(self)

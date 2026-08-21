@@ -1,4 +1,5 @@
 from sen import (
+    AxisKind,
     Figure,
     LineSeries,
     LineStyle,
@@ -151,6 +152,16 @@ def limits_figure() raises -> Figure:
     return figure^
 
 
+def semilog_decay_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0, 3.0, 4.0]
+    var ys: List[Float64] = [1000.0, 100.0, 10.0, 1.0, 0.1]
+    var figure = Figure()
+    figure.line(xs, ys)
+    figure.set_y_scale(AxisKind.LOG10)
+    figure.set_grid(True)
+    return figure^
+
+
 def main() raises:
     var margins = fixture_margins()
     var single = single_line_figure()
@@ -208,4 +219,9 @@ def main() raises:
         "tests/fixtures/limits.svg",
         render_svg(limits, 200.0, 140.0, margins),
     )
-    print("Regenerated 11 SVG fixtures under tests/fixtures/.")
+    var semilog = semilog_decay_figure()
+    save_svg(
+        "tests/fixtures/semilog_decay.svg",
+        render_svg(semilog, 200.0, 140.0, margins),
+    )
+    print("Regenerated 12 SVG fixtures under tests/fixtures/.")
