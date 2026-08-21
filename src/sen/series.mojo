@@ -51,7 +51,7 @@ struct PlotPoint(Copyable, ImplicitlyCopyable):
 
     def __init__(out self, x: Float64, y: Float64) raises:
         if not isfinite(x) or not isfinite(y):
-            raise Error("plot coordinates must be finite")
+            raise Error("plot coordinates must be finite; got x=", x, ", y=", y)
         self._x = x
         self._y = y
 
@@ -66,7 +66,12 @@ struct PlotPoint(Copyable, ImplicitlyCopyable):
     def validate(self) raises:
         """Validate the stored coordinates explicitly."""
         if not isfinite(self._x) or not isfinite(self._y):
-            raise Error("plot coordinates must be finite")
+            raise Error(
+                "plot coordinates must be finite; got x=",
+                self._x,
+                ", y=",
+                self._y,
+            )
 
     def x(self) -> Float64:
         return self._x
@@ -101,11 +106,30 @@ struct DataBounds(Copyable, ImplicitlyCopyable):
             or not isfinite(y_min)
             or not isfinite(y_max)
         ):
-            raise Error("data bounds must be finite")
+            raise Error(
+                "data bounds must be finite; got x_min=",
+                x_min,
+                " x_max=",
+                x_max,
+                " y_min=",
+                y_min,
+                " y_max=",
+                y_max,
+            )
         if x_min > x_max:
-            raise Error("data bounds x minimum must not exceed x maximum")
+            raise Error(
+                "data bounds x minimum must not exceed x maximum; got x_min = ",
+                x_min,
+                ", x_max = ",
+                x_max,
+            )
         if y_min > y_max:
-            raise Error("data bounds y minimum must not exceed y maximum")
+            raise Error(
+                "data bounds y minimum must not exceed y maximum; got y_min = ",
+                y_min,
+                ", y_max = ",
+                y_max,
+            )
         self._x_min = x_min
         self._x_max = x_max
         self._y_min = y_min
@@ -145,11 +169,30 @@ struct DataBounds(Copyable, ImplicitlyCopyable):
             or not isfinite(self._y_min)
             or not isfinite(self._y_max)
         ):
-            raise Error("data bounds must be finite")
+            raise Error(
+                "data bounds must be finite; got x_min=",
+                self._x_min,
+                " x_max=",
+                self._x_max,
+                " y_min=",
+                self._y_min,
+                " y_max=",
+                self._y_max,
+            )
         if self._x_min > self._x_max:
-            raise Error("data bounds x minimum must not exceed x maximum")
+            raise Error(
+                "data bounds x minimum must not exceed x maximum; got x_min = ",
+                self._x_min,
+                ", x_max = ",
+                self._x_max,
+            )
         if self._y_min > self._y_max:
-            raise Error("data bounds y minimum must not exceed y maximum")
+            raise Error(
+                "data bounds y minimum must not exceed y maximum; got y_min = ",
+                self._y_min,
+                ", y_max = ",
+                self._y_max,
+            )
 
     def x_min(self) -> Float64:
         return self._x_min
@@ -231,14 +274,27 @@ struct LineSeries(Copyable):
         ``List[Float64]`` values convert implicitly to the accepted span shape.
         """
         if len(x) != len(y):
-            raise Error("x and y coordinate sequences must have equal length")
+            raise Error(
+                "x and y coordinate sequences must have equal length; got len(x) = ",
+                len(x),
+                ", len(y) = ",
+                len(y),
+            )
         var xs = List[Float64](capacity=len(x))
         var ys = List[Float64](capacity=len(y))
         for index in range(len(x)):
             var x_coordinate = x[index]
             var y_coordinate = y[index]
             if not isfinite(x_coordinate) or not isfinite(y_coordinate):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    x_coordinate,
+                    ", y=",
+                    y_coordinate,
+                    ") must be finite",
+                )
             xs.append(x_coordinate)
             ys.append(y_coordinate)
         var segment_starts = List[Int]()
@@ -258,7 +314,12 @@ struct LineSeries(Copyable):
         missing: MissingPolicy,
     ) raises -> Self:
         if len(x) != len(y):
-            raise Error("x and y coordinate sequences must have equal length")
+            raise Error(
+                "x and y coordinate sequences must have equal length; got len(x) = ",
+                len(x),
+                ", len(y) = ",
+                len(y),
+            )
         var xs = List[Float64](capacity=len(x))
         var ys = List[Float64](capacity=len(y))
         var segment_starts = List[Int]()
@@ -271,7 +332,15 @@ struct LineSeries(Copyable):
             if (not x_is_nan and not isfinite(x_coordinate)) or (
                 not y_is_nan and not isfinite(y_coordinate)
             ):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    x_coordinate,
+                    ", y=",
+                    y_coordinate,
+                    ") must be finite",
+                )
             var is_missing = x_is_nan or y_is_nan
             if is_missing:
                 if missing == MissingPolicy.ERROR:
@@ -307,10 +376,24 @@ struct LineSeries(Copyable):
     def validate(self) raises:
         """Validate coordinate buffers and segment topology explicitly."""
         if len(self._xs) != len(self._ys):
-            raise Error("line-series coordinate buffers must have equal length")
+            raise Error(
+                "line-series coordinate buffers must have equal length; got ",
+                len(self._xs),
+                " x values and ",
+                len(self._ys),
+                " y values",
+            )
         for index in range(len(self._xs)):
             if not isfinite(self._xs[index]) or not isfinite(self._ys[index]):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    self._xs[index],
+                    ", y=",
+                    self._ys[index],
+                    ") must be finite",
+                )
         if len(self._xs) == 0:
             if len(self._segment_starts) != 0:
                 raise Error("empty line-series must not contain segments")
@@ -321,9 +404,19 @@ struct LineSeries(Copyable):
         for index in range(len(self._segment_starts)):
             var start = self._segment_starts[index]
             if start <= previous:
-                raise Error("line-series segment starts must be strictly increasing")
+                raise Error(
+                    "line-series segment starts must be strictly increasing; got ",
+                    start,
+                    " after ",
+                    previous,
+                )
             if start >= len(self._xs):
-                raise Error("line-series segment start is outside point storage")
+                raise Error(
+                    "line-series segment start must be within [0, ",
+                    len(self._xs),
+                    "); got ",
+                    start,
+                )
             previous = start
 
     def append(mut self, point: PlotPoint) raises:
@@ -340,10 +433,23 @@ struct LineSeries(Copyable):
     ) raises:
         """Append a validated coordinate batch to the current segment."""
         if len(x) != len(y):
-            raise Error("x and y coordinate sequences must have equal length")
+            raise Error(
+                "x and y coordinate sequences must have equal length; got len(x) = ",
+                len(x),
+                ", len(y) = ",
+                len(y),
+            )
         for index in range(len(x)):
             if not isfinite(x[index]) or not isfinite(y[index]):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    x[index],
+                    ", y=",
+                    y[index],
+                    ") must be finite",
+                )
         if len(x) == 0:
             return
         if len(self._xs) == 0:
@@ -356,7 +462,10 @@ struct LineSeries(Copyable):
         """Append ``point`` as the first point after an explicit data gap."""
         point.validate()
         if len(self._xs) == 0:
-            raise Error("a new line segment requires an existing point")
+            raise Error(
+                "a new line segment requires an existing point; append the first "
+                "point with append() before start_segment()"
+            )
         var start = len(self._xs)
         self._xs.append(point._x)
         self._ys.append(point._y)
@@ -375,13 +484,23 @@ struct LineSeries(Copyable):
     def point(self, index: Int) raises -> PlotPoint:
         """Return a point by position, rejecting indices outside the series."""
         if index < 0 or index >= len(self._xs):
-            raise Error("line-series point index is out of bounds")
+            raise Error(
+                "line-series point index must be within [0, ",
+                len(self._xs),
+                "); got ",
+                index,
+            )
         return PlotPoint._from_validated(self._xs[index], self._ys[index])
 
     def segment_point_count(self, segment_index: Int) raises -> Int:
         """Return the number of points in one connected line segment."""
         if segment_index < 0 or segment_index >= len(self._segment_starts):
-            raise Error("line-series segment index is out of bounds")
+            raise Error(
+                "line-series segment index must be within [0, ",
+                len(self._segment_starts),
+                "); got ",
+                segment_index,
+            )
         var end = len(self._xs)
         if segment_index + 1 < len(self._segment_starts):
             end = self._segment_starts[segment_index + 1]
@@ -391,14 +510,22 @@ struct LineSeries(Copyable):
         """Return a point by segment-local position."""
         var count = self.segment_point_count(segment_index)
         if point_index < 0 or point_index >= count:
-            raise Error("line-segment point index is out of bounds")
+            raise Error(
+                "line-segment point index must be within [0, ",
+                count,
+                "); got ",
+                point_index,
+            )
         var index = self._segment_starts[segment_index] + point_index
         return PlotPoint._from_validated(self._xs[index], self._ys[index])
 
     def bounds(self) raises -> DataBounds:
         """Return the trusted extent, rejecting an empty series."""
         if self.is_empty():
-            raise Error("empty line-series has no data bounds")
+            raise Error(
+                "empty line-series has no data bounds; append points before "
+                "requesting bounds"
+            )
         var x_min = self._xs[0]
         var x_max = self._xs[0]
         var y_min = self._ys[0]
@@ -447,14 +574,27 @@ struct ScatterSeries(Copyable):
     ) raises -> Self:
         """Build markers in input order; reject unequal lengths or non-finite data."""
         if len(x) != len(y):
-            raise Error("x and y coordinate sequences must have equal length")
+            raise Error(
+                "x and y coordinate sequences must have equal length; got len(x) = ",
+                len(x),
+                ", len(y) = ",
+                len(y),
+            )
         var xs = List[Float64](capacity=len(x))
         var ys = List[Float64](capacity=len(y))
         for index in range(len(x)):
             var x_coordinate = x[index]
             var y_coordinate = y[index]
             if not isfinite(x_coordinate) or not isfinite(y_coordinate):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    x_coordinate,
+                    ", y=",
+                    y_coordinate,
+                    ") must be finite",
+                )
             xs.append(x_coordinate)
             ys.append(y_coordinate)
         return Self(xs^, ys^, _validated=_Validated())
@@ -466,7 +606,12 @@ struct ScatterSeries(Copyable):
         missing: MissingPolicy,
     ) raises -> Self:
         if len(x) != len(y):
-            raise Error("x and y coordinate sequences must have equal length")
+            raise Error(
+                "x and y coordinate sequences must have equal length; got len(x) = ",
+                len(x),
+                ", len(y) = ",
+                len(y),
+            )
         var xs = List[Float64](capacity=len(x))
         var ys = List[Float64](capacity=len(y))
         for index in range(len(x)):
@@ -477,7 +622,15 @@ struct ScatterSeries(Copyable):
             if (not x_is_nan and not isfinite(x_coordinate)) or (
                 not y_is_nan and not isfinite(y_coordinate)
             ):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    x_coordinate,
+                    ", y=",
+                    y_coordinate,
+                    ") must be finite",
+                )
             var is_missing = x_is_nan or y_is_nan
             if is_missing:
                 if missing == MissingPolicy.ERROR:
@@ -507,10 +660,24 @@ struct ScatterSeries(Copyable):
     def validate(self) raises:
         """Validate equal lengths then finite coordinates in stable index order."""
         if len(self._xs) != len(self._ys):
-            raise Error("scatter-series coordinate buffers must have equal length")
+            raise Error(
+                "scatter-series coordinate buffers must have equal length; got ",
+                len(self._xs),
+                " x values and ",
+                len(self._ys),
+                " y values",
+            )
         for index in range(len(self._xs)):
             if not isfinite(self._xs[index]) or not isfinite(self._ys[index]):
-                raise Error("plot coordinates must be finite")
+                raise Error(
+                    "coordinate at index ",
+                    index,
+                    " (x=",
+                    self._xs[index],
+                    ", y=",
+                    self._ys[index],
+                    ") must be finite",
+                )
 
     def point_count(self) -> Int:
         """Return the deterministic marker count without raising."""
@@ -523,13 +690,21 @@ struct ScatterSeries(Copyable):
     def point(self, index: Int) raises -> PlotPoint:
         """Return the exact point by position; reject an out-of-range index."""
         if index < 0 or index >= len(self._xs):
-            raise Error("scatter-series point index is out of bounds")
+            raise Error(
+                "scatter-series point index must be within [0, ",
+                len(self._xs),
+                "); got ",
+                index,
+            )
         return PlotPoint._from_validated(self._xs[index], self._ys[index])
 
     def bounds(self) raises -> DataBounds:
         """Return deterministic index-order bounds, rejecting an empty series."""
         if self.is_empty():
-            raise Error("empty scatter-series has no data bounds")
+            raise Error(
+                "empty scatter-series has no data bounds; append points before "
+                "requesting bounds"
+            )
         var x_min = self._xs[0]
         var x_max = self._xs[0]
         var y_min = self._ys[0]
@@ -882,15 +1057,45 @@ struct Figure(Copyable):
         for index in range(len(self._scatter_styles)):
             self._scatter_styles[index].validate()
         if len(self._line_labels) != len(self._lines):
-            raise Error("figure line labels must match stored line series")
+            raise Error(
+                "figure line labels must match stored line series; got ",
+                len(self._line_labels),
+                " labels for ",
+                len(self._lines),
+                " series",
+            )
         if len(self._line_styles) != len(self._lines):
-            raise Error("figure line styles must match stored line series")
+            raise Error(
+                "figure line styles must match stored line series; got ",
+                len(self._line_styles),
+                " styles for ",
+                len(self._lines),
+                " series",
+            )
         if len(self._scatter_labels) != len(self._scatters):
-            raise Error("figure scatter labels must match stored scatter series")
+            raise Error(
+                "figure scatter labels must match stored scatter series; got ",
+                len(self._scatter_labels),
+                " labels for ",
+                len(self._scatters),
+                " series",
+            )
         if len(self._scatter_styles) != len(self._scatters):
-            raise Error("figure scatter styles must match stored scatter series")
+            raise Error(
+                "figure scatter styles must match stored scatter series; got ",
+                len(self._scatter_styles),
+                " styles for ",
+                len(self._scatters),
+                " series",
+            )
         if len(self._order) != len(self._lines) + len(self._scatters):
-            raise Error("figure series order must include every stored series")
+            raise Error(
+                "figure series order must include every stored series; got ",
+                len(self._order),
+                " order entries for ",
+                len(self._lines) + len(self._scatters),
+                " series",
+            )
 
         var seen_lines = List[Bool](capacity=len(self._lines))
         for _ in range(len(self._lines)):
@@ -902,13 +1107,23 @@ struct Figure(Copyable):
             ref entry = self._order[order_index]
             if entry.kind._value == _SeriesKind.LINE._value:
                 if entry.index < 0 or entry.index >= len(self._lines):
-                    raise Error("figure line order index is out of bounds")
+                    raise Error(
+                        "figure line order index must be within [0, ",
+                        len(self._lines),
+                        "); got ",
+                        entry.index,
+                    )
                 if seen_lines[entry.index]:
                     raise Error("figure series order must not contain duplicates")
                 seen_lines[entry.index] = True
             elif entry.kind._value == _SeriesKind.SCATTER._value:
                 if entry.index < 0 or entry.index >= len(self._scatters):
-                    raise Error("figure scatter order index is out of bounds")
+                    raise Error(
+                        "figure scatter order index must be within [0, ",
+                        len(self._scatters),
+                        "); got ",
+                        entry.index,
+                    )
                 if seen_scatters[entry.index]:
                     raise Error("figure series order must not contain duplicates")
                 seen_scatters[entry.index] = True
@@ -980,19 +1195,34 @@ struct Figure(Copyable):
     def line(self, index: Int) raises -> ref[self._lines[index]] LineSeries:
         """Return a stable read reference; reject an out-of-range line index."""
         if index < 0 or index >= len(self._lines):
-            raise Error("figure line index is out of bounds")
+            raise Error(
+                "figure line index must be within [0, ",
+                len(self._lines),
+                "); got ",
+                index,
+            )
         return self._lines[index]
 
     def scatter(self, index: Int) raises -> ref[self._scatters[index]] ScatterSeries:
         """Return a stable read reference; reject an out-of-range scatter index."""
         if index < 0 or index >= len(self._scatters):
-            raise Error("figure scatter index is out of bounds")
+            raise Error(
+                "figure scatter index must be within [0, ",
+                len(self._scatters),
+                "); got ",
+                index,
+            )
         return self._scatters[index]
 
     def line_label(self, index: Int) raises -> ref[self._line_labels[index]] String:
         """Return the exact label; reject an out-of-range line position."""
         if index < 0 or index >= len(self._line_labels):
-            raise Error("figure line-label index is out of bounds")
+            raise Error(
+                "figure line-label index must be within [0, ",
+                len(self._line_labels),
+                "); got ",
+                index,
+            )
         return self._line_labels[index]
 
     def scatter_label(
@@ -1000,7 +1230,12 @@ struct Figure(Copyable):
     ) raises -> ref[self._scatter_labels[index]] String:
         """Return the exact label; reject an out-of-range scatter position."""
         if index < 0 or index >= len(self._scatter_labels):
-            raise Error("figure scatter-label index is out of bounds")
+            raise Error(
+                "figure scatter-label index must be within [0, ",
+                len(self._scatter_labels),
+                "); got ",
+                index,
+            )
         return self._scatter_labels[index]
 
     def _series_count(self) -> Int:

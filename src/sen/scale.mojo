@@ -142,9 +142,26 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
             or not isfinite(self._range_start)
             or not isfinite(self._range_end)
         ):
-            raise Error("linear scale domain and range values must be finite")
+            raise Error(
+                (
+                    "linear scale domain and range values must be finite; got "
+                    "domain_start = "
+                ),
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+                ", range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if self._domain_start == self._domain_end:
-            raise Error("linear scale domain must not be degenerate")
+            raise Error(
+                "linear scale domain must not be degenerate; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
 
     def domain_start(self) -> Float64:
         """Return the validated first domain endpoint without raising."""
@@ -181,7 +198,15 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
         before mutation; scalar mapping proceeds deterministically by index.
         """
         if len(values) != len(output):
-            raise Error("linear scale output buffer length must match input length")
+            raise Error(
+                (
+                    "linear scale output buffer length must match input length; got "
+                    "len(values) = "
+                ),
+                len(values),
+                ", len(output) = ",
+                len(output),
+            )
         for index in range(len(values)):
             output[index] = self.map(values[index])
 
@@ -192,7 +217,12 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
         rejected here.
         """
         if self._range_start == self._range_end:
-            raise Error("degenerate linear scale range cannot be inverted")
+            raise Error(
+                "degenerate linear scale range cannot be inverted; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if value == self._range_start:
             return self._domain_start
         if value == self._range_end:
@@ -274,22 +304,53 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
         """Validate the stored domain and range, naming an invalid value."""
         if not isfinite(self._domain_start):
             raise Error(
-                "log scale domain_start must be finite; got ", self._domain_start
+                "log scale domain_start must be finite; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
             )
         if not isfinite(self._domain_end):
-            raise Error("log scale domain_end must be finite; got ", self._domain_end)
+            raise Error(
+                "log scale domain_end must be finite; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
         if not isfinite(self._range_start):
-            raise Error("log scale range_start must be finite; got ", self._range_start)
+            raise Error(
+                "log scale range_start must be finite; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if not isfinite(self._range_end):
-            raise Error("log scale range_end must be finite; got ", self._range_end)
+            raise Error(
+                "log scale range_end must be finite; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if self._domain_start <= 0.0:
             raise Error(
-                "log scale domain_start must be positive; got ", self._domain_start
+                "log scale domain_start must be positive; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
             )
         if self._domain_end <= 0.0:
-            raise Error("log scale domain_end must be positive; got ", self._domain_end)
+            raise Error(
+                "log scale domain_end must be positive; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
         if self._domain_start == self._domain_end:
-            raise Error("log scale domain must not be degenerate")
+            raise Error(
+                "log scale domain must not be degenerate; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
 
     def domain_start(self) -> Float64:
         """Return the validated first domain endpoint without revalidation."""
@@ -320,7 +381,12 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
     def invert(self, value: Float64) raises -> Float64:
         """Invert one range value; reject a degenerate range deterministically."""
         if self._range_start == self._range_end:
-            raise Error("degenerate log scale range cannot be inverted")
+            raise Error(
+                "degenerate log scale range cannot be inverted; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if value == self._range_start:
             return self._domain_start
         if value == self._range_end:
@@ -338,7 +404,15 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
         order and scalar evaluation order are deterministic.
         """
         if len(values) != len(output):
-            raise Error("log scale output buffer length must match input length")
+            raise Error(
+                (
+                    "log scale output buffer length must match input length; got "
+                    "len(values) = "
+                ),
+                len(values),
+                ", len(output) = ",
+                len(output),
+            )
         for index in range(len(values)):
             output[index] = self.map(values[index])
 
@@ -390,20 +464,54 @@ def linear_ticks(
     that cannot produce a finite positive step raise before ticks are returned.
     """
     if not isfinite(domain_start) or not isfinite(domain_end):
-        raise Error("linear tick domain values must be finite")
+        raise Error(
+            "linear tick domain values must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start == domain_end:
-        raise Error("linear tick domain must not be degenerate")
+        raise Error(
+            "linear tick domain must not be degenerate; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if target_count < 2:
-        raise Error("linear tick target count must be at least two")
+        raise Error("linear tick target count must be at least two; got ", target_count)
 
     var lo = min(domain_start, domain_end)
     var hi = max(domain_start, domain_end)
     var raw_step = (hi - lo) / Float64(target_count - 1)
     if not isfinite(raw_step) or raw_step <= 0.0:
-        raise Error("linear tick domain span must produce a finite positive step")
+        raise Error(
+            (
+                "linear tick domain span must produce a finite positive step; got "
+                "domain_start = "
+            ),
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+            ", target_count = ",
+            target_count,
+            ", raw_step = ",
+            raw_step,
+        )
     var step = _nearest_nice_step(raw_step)
     if not isfinite(step) or step <= 0.0:
-        raise Error("linear tick domain span must produce a finite positive step")
+        raise Error(
+            (
+                "linear tick domain span must produce a finite positive step; got "
+                "domain_start = "
+            ),
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+            ", target_count = ",
+            target_count,
+            ", step = ",
+            step,
+        )
 
     var tolerance = step * 1.0e-9
     var tick_index = ceil(lo / step - 1.0e-9)
@@ -432,15 +540,40 @@ def log_ticks(domain_start: Float64, domain_end: Float64) raises -> List[Float64
     ``linear_ticks`` and its deterministic 1-2-5 machinery instead.
     """
     if not isfinite(domain_start):
-        raise Error("log tick domain_start must be finite; got ", domain_start)
+        raise Error(
+            "log tick domain_start must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if not isfinite(domain_end):
-        raise Error("log tick domain_end must be finite; got ", domain_end)
+        raise Error(
+            "log tick domain_end must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start <= 0.0:
-        raise Error("log tick domain_start must be positive; got ", domain_start)
+        raise Error(
+            "log tick domain_start must be positive; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_end <= 0.0:
-        raise Error("log tick domain_end must be positive; got ", domain_end)
+        raise Error(
+            "log tick domain_end must be positive; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start == domain_end:
-        raise Error("log tick domain must not be degenerate")
+        raise Error(
+            "log tick domain must not be degenerate; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
 
     var lo = min(domain_start, domain_end)
     var hi = max(domain_start, domain_end)

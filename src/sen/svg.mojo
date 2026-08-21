@@ -243,13 +243,22 @@ def _padded_domain(
     var padded_lo = lo - padding
     var padded_hi = hi + padding
     if not isfinite(padded_lo) or not isfinite(padded_hi) or padded_lo == padded_hi:
-        raise Error("constant ", axis_name, " domain cannot be padded safely")
+        raise Error(
+            "constant ",
+            axis_name,
+            " domain cannot be padded safely; got lo=",
+            _diagnostic_value(lo),
+            ", hi=",
+            _diagnostic_value(hi),
+        )
     return (padded_lo, padded_hi)
 
 
 def _decimal_factor(precision: Int) raises -> Int:
     if precision < 0 or precision > 9:
-        raise Error("SVG decimal precision must be between zero and nine")
+        raise Error(
+            "SVG decimal precision must be between zero and nine; got ", precision
+        )
     var factor = 1
     for _ in range(precision):
         factor *= 10
@@ -265,11 +274,13 @@ def _format_decimal(value: Float64, precision: Int) raises -> String:
     conversion range are rejected.
     """
     if not isfinite(value):
-        raise Error("SVG numbers must be finite")
+        raise Error("SVG numbers must be finite; got ", value)
     var factor = _decimal_factor(precision)
     var magnitude = abs(value)
     if magnitude > 9.0e18 / Float64(factor):
-        raise Error("SVG fixed-decimal value exceeds the supported magnitude")
+        raise Error(
+            "SVG fixed-decimal value exceeds the supported magnitude; got ", value
+        )
     var rounded = Int(floor(magnitude * Float64(factor) + 0.5))
     if rounded == 0:
         return String("0")
@@ -390,7 +401,14 @@ def _log_padded_domain(
         or padded_lo <= 0.0
         or padded_hi <= padded_lo
     ):
-        raise Error("log-scale ", axis_name, " domain cannot be padded safely")
+        raise Error(
+            "log-scale ",
+            axis_name,
+            " domain cannot be padded safely; got lo=",
+            _diagnostic_value(lo),
+            ", hi=",
+            _diagnostic_value(hi),
+        )
     return (padded_lo, padded_hi)
 
 

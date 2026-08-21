@@ -333,8 +333,12 @@ def test_fixed_decimal_formatting_rules() raises:
     assert_equal(_format_svg_number(8.0), "8")
     assert_equal(_format_svg_number(-0.0004), "0")
     assert_equal(_format_svg_number(-0.0005), "-0.001")
-    with assert_raises(contains="SVG numbers must be finite"):
+    with assert_raises(contains="SVG numbers must be finite; got nan"):
         _ = _format_svg_number(Float64("nan"))
+    with assert_raises(
+        contains="SVG decimal precision must be between zero and nine; got 10"
+    ):
+        _ = _format_decimal(1.0, 10)
 
 
 def test_tick_labels_follow_step_magnitude() raises:
