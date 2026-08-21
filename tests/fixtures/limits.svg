@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140" viewBox="0 0 200 140">
+  <defs>
+    <clipPath id="sen-plot-area">
+      <rect x="24" y="8" width="168" height="112"/>
+    </clipPath>
+  </defs>
+  <rect class="sen-background" x="0" y="0" width="200" height="140" fill="#ffffff"/>
+  <rect class="sen-frame" x="24" y="8" width="168" height="112" fill="none" stroke="#d0d0d0" stroke-width="1"/>
+  <line class="sen-axis" x1="24" y1="120" x2="192" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="24" y1="120" x2="24" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="24" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
+  <line class="sen-tick" x1="57.6" y1="120" x2="57.6" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="57.6" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
+  <line class="sen-tick" x1="91.2" y1="120" x2="91.2" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="91.2" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">4</text>
+  <line class="sen-tick" x1="124.8" y1="120" x2="124.8" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="124.8" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">6</text>
+  <line class="sen-tick" x1="158.4" y1="120" x2="158.4" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="158.4" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">8</text>
+  <line class="sen-tick" x1="192" y1="120" x2="192" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="192" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">10</text>
+  <line class="sen-axis" x1="24" y1="8" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="20" y1="120" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="123" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0</text>
+  <line class="sen-tick" x1="20" y1="97.6" x2="24" y2="97.6" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="100.6" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">2</text>
+  <line class="sen-tick" x1="20" y1="75.2" x2="24" y2="75.2" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="78.2" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">4</text>
+  <line class="sen-tick" x1="20" y1="52.8" x2="24" y2="52.8" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="55.8" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">6</text>
+  <line class="sen-tick" x1="20" y1="30.4" x2="24" y2="30.4" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="33.4" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">8</text>
+  <line class="sen-tick" x1="20" y1="8" x2="24" y2="8" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="11" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">10</text>
+  <g clip-path="url(#sen-plot-area)">
+    <polyline class="sen-series-0" points="-60,176 24,120 192,8 276,-48" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
+  </g>
+</svg>

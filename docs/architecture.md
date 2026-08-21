@@ -28,3 +28,10 @@ explicit typed values, produce deterministic outputs for deterministic inputs,
 and report invalid state rather than silently replacing it with a default.
 I/O, clocks, randomness, terminal queries, filesystem access, and accelerator
 selection stay at explicit effect or backend boundaries.
+
+Mojo 1.0 does not make underscore-prefixed struct fields private. Direct
+mutation of that storage is out of contract. Constructors establish semantic
+invariants, mutators validate their inputs and the local invariants they affect,
+and read-only operations trust stored state without revalidation. Each validated
+type exposes one explicit `validate() raises` checkpoint for unusual low-level
+mutation.

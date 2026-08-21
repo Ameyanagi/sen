@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="140" viewBox="0 0 240 140">
+  <defs>
+    <clipPath id="sen-plot-area">
+      <rect x="24" y="8" width="208" height="112"/>
+    </clipPath>
+  </defs>
+  <rect class="sen-background" x="0" y="0" width="240" height="140" fill="#ffffff"/>
+  <rect class="sen-frame" x="24" y="8" width="208" height="112" fill="none" stroke="#d0d0d0" stroke-width="1"/>
+  <line class="sen-axis" x1="24" y1="120" x2="232" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="33.455" y1="120" x2="33.455" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="33.455" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
+  <line class="sen-tick" x1="96.485" y1="120" x2="96.485" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="96.485" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
+  <line class="sen-tick" x1="159.515" y1="120" x2="159.515" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="159.515" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">4</text>
+  <line class="sen-tick" x1="222.545" y1="120" x2="222.545" y2="124" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="222.545" y="134" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">6</text>
+  <line class="sen-axis" x1="24" y1="8" x2="24" y2="120" stroke="#222222" stroke-width="1"/>
+  <line class="sen-tick" x1="20" y1="114.909" x2="24" y2="114.909" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="117.909" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0</text>
+  <line class="sen-tick" x1="20" y1="94.545" x2="24" y2="94.545" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="97.545" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.2</text>
+  <line class="sen-tick" x1="20" y1="74.182" x2="24" y2="74.182" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="77.182" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.4</text>
+  <line class="sen-tick" x1="20" y1="53.818" x2="24" y2="53.818" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="56.818" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.6</text>
+  <line class="sen-tick" x1="20" y1="33.455" x2="24" y2="33.455" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="36.455" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.8</text>
+  <line class="sen-tick" x1="20" y1="13.091" x2="24" y2="13.091" stroke="#222222" stroke-width="1"/>
+  <text class="sen-tick-label" x="18" y="16.091" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1</text>
+  <g clip-path="url(#sen-plot-area)">
+    <circle class="sen-series-0" cx="33.455" cy="114.909" r="2.5" fill="#1f77b4"/>
+    <rect class="sen-series-1" x="62.47" y="10.591" width="5" height="5" fill="#ff7f0e"/>
+    <polygon class="sen-series-2" points="96.485,112.409 98.985,117.409 93.985,117.409" fill="#2ca02c"/>
+    <polygon class="sen-series-3" points="128,10.591 130.5,13.091 128,15.591 125.5,13.091" fill="#d62728"/>
+    <line class="sen-series-4" x1="157.015" y1="114.909" x2="162.015" y2="114.909" stroke="#9467bd" stroke-width="1.5"/>
+    <line class="sen-series-4" x1="159.515" y1="112.409" x2="159.515" y2="117.409" stroke="#9467bd" stroke-width="1.5"/>
+    <line class="sen-series-5" x1="188.53" y1="10.591" x2="193.53" y2="15.591" stroke="#8c564b" stroke-width="1.5"/>
+    <line class="sen-series-5" x1="188.53" y1="15.591" x2="193.53" y2="10.591" stroke="#8c564b" stroke-width="1.5"/>
+    <polygon class="sen-series-6" points="222.545,112.009 223.192,114.019 225.304,114.013 223.592,115.249 224.25,117.255 222.545,116.009 220.841,117.255 221.499,115.249 219.787,114.013 221.899,114.019" fill="#1f77b4"/>
+  </g>
+</svg>
