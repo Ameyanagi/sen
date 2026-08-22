@@ -243,8 +243,8 @@ struct DrawCommand(Copyable, Equatable):
             if self.series_index < 0:
                 raise Error("render data commands require a nonnegative series index")
         elif self.kind == CommandKind.MARKER:
-            if self.palette_slot < 0:
-                raise Error("render marker commands require a palette slot")
+            if self.palette_slot < 0 and self.color.byte_length() == 0:
+                raise Error("render marker commands require a palette slot or color")
             if self.series_index < 0:
                 raise Error("render data commands require a nonnegative series index")
         elif self.kind == CommandKind.RECTANGLE:
@@ -258,8 +258,10 @@ struct DrawCommand(Copyable, Equatable):
             if self.line_width <= 0.0:
                 raise Error("render legend line commands require a positive line width")
         elif self.kind == CommandKind.LEGEND_MARKER:
-            if self.palette_slot < 0:
-                raise Error("render legend marker commands require a palette slot")
+            if self.palette_slot < 0 and self.color.byte_length() == 0:
+                raise Error(
+                    "render legend marker commands require a palette slot or color"
+                )
         elif self.kind == CommandKind.LEGEND_RECTANGLE:
             if self.color.byte_length() == 0:
                 raise Error("render legend rectangle commands require a color")

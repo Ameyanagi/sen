@@ -117,6 +117,7 @@ def _marker_command(
     kind: CommandKind,
     x: Float64,
     y: Float64,
+    color: StringSlice,
     palette_slot: Int,
     series_index: Int,
     marker_style: MarkerStyle,
@@ -129,7 +130,7 @@ def _marker_command(
         0.0,
         _empty_points(),
         String(),
-        String(),
+        String(color),
         palette_slot,
         series_index,
         0.0,
@@ -728,15 +729,22 @@ def build_render_plan(
 
     var auto_color_index = 0
     var resolved_slots = List[Int](capacity=figure._series_count())
+    var resolved_colors = List[String](capacity=figure._series_count())
     for order_index in range(figure._series_count()):
         var series_index = figure._series_index(order_index)
         var style = figure._series_style(order_index)
         var palette_slot = style.palette_slot()
-        if palette_slot == -1:
+        var color = style.color()
+        if color.byte_length() > 0:
+            palette_slot = -1
+        elif palette_slot == -1:
             palette_slot = auto_color_index % 6
             auto_color_index += 1
+            color = _palette_color(palette_slot)
+        else:
+            color = _palette_color(palette_slot)
         resolved_slots.append(palette_slot)
-        var color = _palette_color(palette_slot)
+        resolved_colors.append(color.copy())
         if figure._series_is_line(order_index):
             ref line = figure.line(series_index)
             for segment_index in range(line.segment_count()):
@@ -828,6 +836,7 @@ def build_render_plan(
                         CommandKind.MARKER,
                         x_mapper.map(point.x()),
                         y_mapper.map(point.y()),
+                        color,
                         palette_slot,
                         order_index,
                         style.marker_style(),
@@ -879,6 +888,7 @@ def build_render_plan(
                 var glyph_x = legend_x + 6.0
                 var style = figure._series_style(order_index)
                 var palette_slot = resolved_slots[order_index]
+                ref color = resolved_colors[order_index]
                 if figure._series_is_line(order_index):
                     commands.append(
                         _styled_line_command(
@@ -887,7 +897,7 @@ def build_render_plan(
                             center_y,
                             glyph_x + 16.0,
                             center_y,
-                            _palette_color(palette_slot),
+                            color,
                             style.line_width(),
                             style.line_style(),
                         )
@@ -899,7 +909,7 @@ def build_render_plan(
                             center_y - 4.0,
                             12.0,
                             8.0,
-                            _palette_color(palette_slot),
+                            color,
                             style.line_width(),
                             style.line_style(),
                         )
@@ -912,7 +922,7 @@ def build_render_plan(
                             center_y - 4.0,
                             12.0,
                             8.0,
-                            _palette_color(palette_slot),
+                            color,
                             -1,
                         )
                     )
@@ -922,6 +932,7 @@ def build_render_plan(
                             CommandKind.LEGEND_MARKER,
                             glyph_x + 8.0,
                             center_y,
+                            color,
                             palette_slot,
                             -1,
                             style.marker_style(),

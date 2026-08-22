@@ -416,7 +416,9 @@ def _append_marker(mut svg: String, command: DrawCommand) raises:
     var indent = String("    ")
     if command.kind._value == CommandKind.LEGEND_MARKER._value:
         indent = String("  ")
-    var color = _palette_color(command.palette_slot)
+    var color = command.color.copy()
+    if color.byte_length() == 0:
+        color = _palette_color(command.palette_slot)
     var css_class = _semantic_class(command)
     var marker = command.marker_style
     if marker == MarkerStyle.NONE or marker == MarkerStyle.CIRCLE:
