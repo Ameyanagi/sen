@@ -6,10 +6,21 @@ Scientific plotting for Mojo.
 
 ## Install
 
-In a [Pixi](https://pixi.sh/) project, add the ecosystem channel and package:
+In a [Pixi](https://pixi.sh/) project, configure the ecosystem, Mojo, and
+Conda Forge channels in `pixi.toml`:
+
+```toml
+[workspace]
+channels = [
+    "https://ameyanagi.github.io/mojo-channel",
+    "https://conda.modular.com/max",
+    "conda-forge",
+]
+```
+
+Then add the package:
 
 ```sh
-pixi project channel add https://ameyanagi.github.io/mojo-channel
 pixi add mojo-sen
 ```
 
@@ -145,8 +156,8 @@ pixi run example
 ```
 
 `pixi run check` covers formatting, tests, and package precompilation. The
-installed-package smoke test runs separately through `pixi run package` in the
-Linux CI package job and as a local release gate.
+installed-package smoke test runs separately through `pixi run package` in CI,
+on every supported native target for releases, and as a local release gate.
 
 `pixi run bench-svg` builds and runs the large-series p50/p95 phase benchmark.
 See [the profiling report](docs/performance.md) for the Time Profiler procedure,
@@ -164,8 +175,8 @@ documented.
 
 ## Package
 
-The Mojo import is `sen`. The eventual Conda distribution is
-`mojo-sen`. Source lives under `src/sen/`, whose
+The Mojo import is `sen`. The Conda distribution is `mojo-sen`. Source lives
+under `src/sen/`, whose
 `__init__.mojo` defines the package boundary.
 
 The semantic layer remains renderer-neutral: constructor-validated points,

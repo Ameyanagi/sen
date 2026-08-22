@@ -3,7 +3,7 @@ authors = ["Ameyanagi <contact@ameyanagi.com>"]
 channels = ["https://conda.modular.com/max", "conda-forge"]
 name = "sen"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
-version = "0.0.0"
+version = "0.1.0"
 
 [tasks]
 bench = { cmd = "mojo run -I src benchmarks/bench_linear_scale.mojo", description = "Benchmark scalar and SIMD linear-scale mapping" }
