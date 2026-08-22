@@ -8,6 +8,7 @@ from sen import (
     view_bounds,
 )
 from std.collections import List
+from std.math import isfinite
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -65,6 +66,111 @@ def test_linear_scale_batch_matches_scalar_mapping() raises:
     with assert_raises(contains="got len(values) = 5, len(output) = 1"):
         scale.map_all(values, short_output)
     assert_true(short_output[0] == 0.0)
+
+
+def _linear_batch_fixture_value(index: Int) raises -> Float64:
+    var kind = index % 8
+    if kind == 0:
+        return -13.25
+    if kind == 1:
+        return 9.5
+    if kind == 2:
+        return -0.0
+    if kind == 3:
+        return Float64("nan")
+    if kind == 4:
+        return Float64("inf")
+    if kind == 5:
+        return Float64("-inf")
+    if kind == 6:
+        return 1.0e200
+    return Float64(index) * 0.375 - 17.0
+
+
+def test_linear_scale_simd_batch_exactly_matches_scalar_for_awkward_lengths() raises:
+    var scale = LinearScale(-13.25, 9.5, -0.0, 101.25)
+    var lengths: List[Int] = [0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33]
+
+    for length in lengths:
+        var values = List[Float64](capacity=length)
+        var expected = List[Float64](capacity=length)
+        for index in range(length):
+            var value = _linear_batch_fixture_value(index)
+            values.append(value)
+            expected.append(scale.map(value))
+
+        var output = List[Float64](length=length, fill=42.0)
+        scale.map_all(values, output)
+
+        for index in range(length):
+            assert_equal(
+                output[index].to_bits[DType.uint64](),
+                expected[index].to_bits[DType.uint64](),
+            )
+
+
+def test_linear_scale_maps_the_full_finite_domain_without_overflow() raises:
+    var maximum = Float64.MAX_FINITE
+    var scale = LinearScale(-maximum, maximum, 24.0, 152.0)
+    var values: List[Float64] = [
+        -maximum,
+        -maximum * 0.5,
+        0.0,
+        maximum * 0.5,
+        maximum,
+        -maximum * 0.25,
+        maximum * 0.25,
+        1.0,
+        -1.0,
+    ]
+    var output = List[Float64](length=len(values), fill=0.0)
+
+    scale.map_all(values, output)
+
+    assert_true(scale.map(0.0) == 88.0)
+    assert_true(scale.map(-maximum * 0.5) == 56.0)
+    assert_true(scale.map(maximum * 0.5) == 120.0)
+    assert_true(scale.invert(88.0) == 0.0)
+    for index in range(len(values)):
+        assert_true(isfinite(output[index]))
+        assert_equal(
+            output[index].to_bits[DType.uint64](),
+            scale.map(values[index]).to_bits[DType.uint64](),
+        )
+
+    var reversed_scale = LinearScale(maximum, -maximum, 152.0, 24.0)
+    assert_true(reversed_scale.map(0.0) == 88.0)
+    assert_true(reversed_scale.invert(88.0) == 0.0)
+
+
+def test_linear_scale_divides_before_multiplying_a_large_finite_span() raises:
+    var large = 8.0e307
+    var scale = LinearScale(-large, large, 24.0, 152.0)
+    var values: List[Float64] = [
+        -large,
+        -large * 0.5,
+        0.0,
+        large * 0.5,
+        large,
+        -large * 0.25,
+        large * 0.25,
+        1.0,
+        -1.0,
+    ]
+    var output = List[Float64](length=len(values), fill=0.0)
+
+    scale.map_all(values, output)
+
+    assert_true(scale.map(0.0) == 88.0)
+    assert_true(scale.map(-large * 0.5) == 56.0)
+    assert_true(scale.map(large * 0.5) == 120.0)
+    assert_true(scale.invert(88.0) == 0.0)
+    for index in range(len(values)):
+        assert_true(isfinite(output[index]))
+        assert_equal(
+            output[index].to_bits[DType.uint64](),
+            scale.map(values[index]).to_bits[DType.uint64](),
+        )
 
 
 def test_linear_scale_rejects_invalid_construction() raises:

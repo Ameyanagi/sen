@@ -2,6 +2,7 @@
 
 from std.collections import List
 from std.math import ceil, isfinite, log10
+from std.sys import simd_width_of
 
 from .series import DataBounds
 
@@ -75,6 +76,35 @@ def view_bounds(
             y_max += y_padding
 
     return DataBounds(x_min, x_max, y_min, y_max)
+
+
+def _stable_affine(
+    value: Float64,
+    input_start: Float64,
+    input_end: Float64,
+    output_start: Float64,
+    output_end: Float64,
+) -> Float64:
+    """Map one value without overflowing a representable affine fraction."""
+    var input_span = input_end - input_start
+    var output_span = output_end - output_start
+    # Opposite-sign finite endpoints can have an unrepresentable subtraction
+    # even though every in-domain interpolation fraction is representable.
+    # Halving before subtraction preserves that fraction without overflow.
+    var fraction: Float64
+    if isfinite(input_span):
+        fraction = (value - input_start) / input_span
+    else:
+        fraction = (value * 0.5 - input_start * 0.5) / (
+            input_end * 0.5 - input_start * 0.5
+        )
+    if isfinite(output_span):
+        return output_start + fraction * output_span
+
+    # A convex combination avoids subtracting opposite-sign output endpoints.
+    # Extrapolation may still be unrepresentable, as its mathematical result can
+    # lie outside Float64; render-plan lowering rejects such a coordinate.
+    return (1.0 - fraction) * output_start + fraction * output_end
 
 
 struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
@@ -185,9 +215,13 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
             return self._range_start
         if value == self._domain_end:
             return self._range_end
-        return self._range_start + (value - self._domain_start) * (
-            self._range_end - self._range_start
-        ) / (self._domain_end - self._domain_start)
+        return _stable_affine(
+            value,
+            self._domain_start,
+            self._domain_end,
+            self._range_start,
+            self._range_end,
+        )
 
     def map_all(self, values: Span[Float64, ...], mut output: List[Float64]) raises:
         """Map ``values`` into an exact-size caller-owned output buffer.
@@ -195,7 +229,8 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
         Existing output elements are overwritten in place. The caller must
         provide one output element per input, so this batch fast path performs no
         allocation, buffer replacement, or hidden copy. A length mismatch raises
-        before mutation; scalar mapping proceeds deterministically by index.
+        before mutation. Complete native-width chunks use SIMD, and any remainder
+        uses the scalar mapping with identical endpoint-preserving semantics.
         """
         if len(values) != len(output):
             raise Error(
@@ -207,7 +242,51 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
                 ", len(output) = ",
                 len(output),
             )
-        for index in range(len(values)):
+
+        comptime width = simd_width_of[DType.float64]()
+        var vector_end = len(values) - len(values) % width
+        if vector_end == 0:
+            for index in range(len(values)):
+                output[index] = self.map(values[index])
+            return
+
+        # Safety: length equality is established above, and vector_end is rounded
+        # down to a whole SIMD width. Every unsafe load and store therefore stays
+        # within both live contiguous buffers; neither pointer escapes this scope.
+        var input_ptr = values.unsafe_ptr()
+        var output_ptr = output.unsafe_ptr()
+        var domain_start = SIMD[DType.float64, width](self._domain_start)
+        var domain_end = SIMD[DType.float64, width](self._domain_end)
+        var range_start = SIMD[DType.float64, width](self._range_start)
+        var range_end = SIMD[DType.float64, width](self._range_end)
+        var scalar_domain_span = self._domain_end - self._domain_start
+        var scalar_range_span = self._range_end - self._range_start
+        var domain_span = SIMD[DType.float64, width](scalar_domain_span)
+        var range_span = SIMD[DType.float64, width](scalar_range_span)
+        var half = SIMD[DType.float64, width](0.5)
+        var one = SIMD[DType.float64, width](1.0)
+        for index in range(0, vector_end, width):
+            var value = input_ptr.unsafe_load[width=width](index)
+            var fraction: SIMD[DType.float64, width]
+            if isfinite(scalar_domain_span):
+                fraction = (value - domain_start) / domain_span
+            else:
+                fraction = (value * half - domain_start * half) / (
+                    domain_end * half - domain_start * half
+                )
+            var mapped: SIMD[DType.float64, width]
+            if isfinite(scalar_range_span):
+                mapped = range_start + fraction * range_span
+            else:
+                mapped = (one - fraction) * range_start + fraction * range_end
+
+            # Apply the second scalar branch first so domain_start keeps priority
+            # even if out-of-contract direct field mutation made endpoints equal.
+            mapped = value.eq(domain_end).select(range_end, mapped)
+            mapped = value.eq(domain_start).select(range_start, mapped)
+            output_ptr.unsafe_store[width=width](index, mapped)
+
+        for index in range(vector_end, len(values)):
             output[index] = self.map(values[index])
 
     def invert(self, value: Float64) raises -> Float64:
@@ -227,9 +306,13 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
             return self._domain_start
         if value == self._range_end:
             return self._domain_end
-        return self._domain_start + (value - self._range_start) * (
-            self._domain_end - self._domain_start
-        ) / (self._range_end - self._range_start)
+        return _stable_affine(
+            value,
+            self._range_start,
+            self._range_end,
+            self._domain_start,
+            self._domain_end,
+        )
 
     def __eq__(self, other: Self) -> Bool:
         """Return exact deterministic endpoint equality without raising."""

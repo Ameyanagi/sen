@@ -11,7 +11,13 @@ from sen import (
     SeriesStyle,
     render_svg,
 )
-from sen.svg import _escape_xml, _format_decimal, _format_svg_number, _tick_label
+from sen.svg import (
+    _append_svg_number,
+    _escape_xml,
+    _format_decimal,
+    _format_svg_number,
+    _tick_label,
+)
 from std.collections import List
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -339,6 +345,29 @@ def test_fixed_decimal_formatting_rules() raises:
         contains="SVG decimal precision must be between zero and nine; got 10"
     ):
         _ = _format_decimal(1.0, 10)
+
+
+def test_direct_svg_number_append_is_byte_equivalent() raises:
+    var values: List[Float64] = [
+        0.0,
+        -0.0004,
+        -0.0005,
+        0.005,
+        1.05,
+        12.3401,
+        -987654.3215,
+        9.0e15,
+    ]
+    for value in values:
+        var direct = String("prefix:")
+        _append_svg_number(direct, value)
+        assert_equal(direct, String("prefix:") + _format_svg_number(value))
+    with assert_raises(contains="SVG numbers must be finite"):
+        var output = String()
+        _append_svg_number(output, Float64("inf"))
+    with assert_raises(contains="exceeds the supported magnitude"):
+        var output = String()
+        _append_svg_number(output, 9.1e15)
 
 
 def test_tick_labels_follow_step_magnitude() raises:

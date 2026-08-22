@@ -162,6 +162,14 @@ def semilog_decay_figure() raises -> Figure:
     return figure^
 
 
+def area_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0, 3.0]
+    var ys: List[Float64] = [1.0, 3.0, 2.0, 4.0]
+    var figure = Figure()
+    figure.area(xs, ys, baseline=0.0, label="signal")
+    return figure^
+
+
 def main() raises:
     var margins = fixture_margins()
     var single = single_line_figure()
@@ -224,4 +232,9 @@ def main() raises:
         "tests/fixtures/semilog_decay.svg",
         render_svg(semilog, 200.0, 140.0, margins),
     )
-    print("Regenerated 12 SVG fixtures under tests/fixtures/.")
+    var area = area_figure()
+    save_svg(
+        "tests/fixtures/area.svg",
+        render_svg(area, 160.0, 100.0, margins),
+    )
+    print("Regenerated 13 SVG fixtures under tests/fixtures/.")
