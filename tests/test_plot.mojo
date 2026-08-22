@@ -57,7 +57,7 @@ def test_plot_forwards_validation_before_insertion() raises:
         plot.line(two, one)
     with assert_raises(contains="x limits must satisfy lo < hi"):
         plot.xlim(2.0, 1.0)
-    with assert_raises(contains="empty figure has no data bounds"):
+    with assert_raises(contains="figure has no series"):
         _ = plot.render_svg()
 
 

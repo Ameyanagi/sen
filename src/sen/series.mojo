@@ -394,8 +394,8 @@ struct LineSeries(Copyable):
 
     @staticmethod
     def _step(
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         mode: StepMode,
     ) raises -> Self:
         """Lower finite observations into one allocation-sized step line."""
@@ -469,8 +469,8 @@ struct LineSeries(Copyable):
 
     @staticmethod
     def _stems(
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         baseline: Float64,
     ) raises -> Self:
         """Lower vertical stems into one segmented line-series."""
@@ -1025,8 +1025,8 @@ struct AreaSeries(Copyable):
 
     @staticmethod
     def from_xy(
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         baseline: Float64 = 0.0,
         missing: MissingPolicy = MissingPolicy.ERROR,
@@ -1827,8 +1827,8 @@ struct Figure(Copyable):
 
     def area(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         baseline: Float64 = 0.0,
         var label: String = String(),
@@ -1846,8 +1846,8 @@ struct Figure(Copyable):
 
     def step(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         mode: StepMode = StepMode.PRE,
         var label: String = String(),
@@ -1859,8 +1859,8 @@ struct Figure(Copyable):
 
     def stem(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         baseline: Float64 = 0.0,
         var label: String = String(),

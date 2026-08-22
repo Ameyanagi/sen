@@ -117,7 +117,7 @@ def test_segmented_area_renders_baseline_style_order_legend_and_clip() raises:
     var area_y: List[Float64] = [2.0, 3.0, nan, 4.0, 2.0]
     var marker_x: List[Float64] = [2.0]
     var marker_y: List[Float64] = [4.5]
-    var area_style = SeriesStyle().with_width(2.5)
+    var area_style = SeriesStyle().with_line_width(2.5)
     area_style = area_style.with_line_style(LineStyle.DASHED)
     var figure = Figure()
     figure.line(line_x, line_y, label="line")

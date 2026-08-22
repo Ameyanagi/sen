@@ -24,8 +24,8 @@ struct Plot(Copyable):
 
     def line(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         var label: String = String(),
         style: SeriesStyle = SeriesStyle(),
@@ -36,8 +36,8 @@ struct Plot(Copyable):
 
     def scatter(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         var label: String = String(),
         style: SeriesStyle = SeriesStyle(),
@@ -48,8 +48,8 @@ struct Plot(Copyable):
 
     def area(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         baseline: Float64 = 0.0,
         var label: String = String(),
@@ -68,8 +68,8 @@ struct Plot(Copyable):
 
     def step(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         mode: StepMode = StepMode.PRE,
         var label: String = String(),
@@ -80,8 +80,8 @@ struct Plot(Copyable):
 
     def stem(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
         *,
         baseline: Float64 = 0.0,
         var label: String = String(),
@@ -92,9 +92,9 @@ struct Plot(Copyable):
 
     def errorbar(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
-        y_error: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
+        y_error: Span[Float64, ImmutAnyOrigin],
         *,
         cap_size: Float64 = 0.0,
         var label: String = String(),
@@ -112,10 +112,10 @@ struct Plot(Copyable):
 
     def errorbar(
         mut self,
-        x: Span[Float64, ...],
-        y: Span[Float64, ...],
-        x_error: Span[Float64, ...],
-        y_error: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        y: Span[Float64, ImmutAnyOrigin],
+        x_error: Span[Float64, ImmutAnyOrigin],
+        y_error: Span[Float64, ImmutAnyOrigin],
         *,
         cap_size: Float64 = 0.0,
         var label: String = String(),
@@ -134,8 +134,8 @@ struct Plot(Copyable):
 
     def bar(
         mut self,
-        x: Span[Float64, ...],
-        height: Span[Float64, ...],
+        x: Span[Float64, ImmutAnyOrigin],
+        height: Span[Float64, ImmutAnyOrigin],
         *,
         width: Float64 = 0.8,
         baseline: Float64 = 0.0,
@@ -155,7 +155,7 @@ struct Plot(Copyable):
     def bar(
         mut self,
         categories: Span[String, _],
-        height: Span[Float64, ...],
+        height: Span[Float64, ImmutAnyOrigin],
         *,
         width: Float64 = 0.8,
         baseline: Float64 = 0.0,
@@ -174,7 +174,7 @@ struct Plot(Copyable):
 
     def histogram(
         mut self,
-        data: Span[Float64, ...],
+        data: Span[Float64, ImmutAnyOrigin],
         *,
         bins: Int = 10,
         var label: String = String(),
@@ -185,7 +185,7 @@ struct Plot(Copyable):
 
     def histogram(
         mut self,
-        data: Span[Float64, ...],
+        data: Span[Float64, ImmutAnyOrigin],
         range_lo: Float64,
         range_hi: Float64,
         *,
