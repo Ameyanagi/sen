@@ -285,12 +285,13 @@ struct LineSeries(Copyable):
 
     @staticmethod
     def from_xy(
-        x: Span[Float64, ImmutAnyOrigin],
-        y: Span[Float64, ImmutAnyOrigin],
+        x: Span[mut=False, Float64, ...],
+        y: Span[mut=False, Float64, ...],
     ) raises -> Self:
         """Build a series from coordinate spans using the bulk-data fast path.
 
-        ``List[Float64]`` values convert implicitly to the accepted span shape.
+        ``List[Float64]`` values convert implicitly to the accepted span shape;
+        mutable or immutable subspans are borrowed read-only for this call.
         """
         if len(x) != len(y):
             raise Error(

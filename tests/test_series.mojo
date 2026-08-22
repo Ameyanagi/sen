@@ -67,6 +67,24 @@ def test_line_series_from_xy_accepts_one_list_for_both_coordinates() raises:
         assert_true(line.point(index).y() == coordinates[index])
 
 
+def test_line_series_from_xy_accepts_nonzero_offset_aliased_spans() raises:
+    var storage: List[Float64] = [99.0, -2.0, 0.5, 4.0, -1.0, 3.0, 1.0, 99.0]
+    var x = Span(storage)[1:4]
+    var y = Span(storage)[4:7]
+    var line = LineSeries.from_xy(x, y)
+
+    assert_equal(line.point_count(), 3)
+    assert_true(line.point(0).x() == -2.0)
+    assert_true(line.point(1).y() == 3.0)
+    assert_true(line.point(2).x() == 4.0)
+
+    # Ingestion borrows the aliased views only for the call and owns its result.
+    storage[1] = 42.0
+    storage[4] = 42.0
+    assert_true(line.point(0).x() == -2.0)
+    assert_true(line.point(0).y() == -1.0)
+
+
 def test_line_series_from_xy_rejects_invalid_inputs() raises:
     var three_values: List[Float64] = [0.0, 1.0, 2.0]
     var two_values: List[Float64] = [0.0, 1.0]

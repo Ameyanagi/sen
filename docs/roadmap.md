@@ -71,8 +71,9 @@ not require Kagerou and remains the portable reference backend.
 
 - [x] **S4.1 Root audit:** export only stable semantic values and the SVG entry
   point; keep layout and encoder implementation types internal.
-- [ ] **S4.2 Numeric-buffer proof:** demonstrate adapters from at least two
-  Mojo-native collection/span shapes without defining a universal Sen array.
+- [x] **S4.2 Numeric-buffer proof:** test direct `List[Float64]` ingestion and
+  non-zero-offset aliased `Span[Float64]` views without defining a universal
+  Sen array.
 - [x] **S4.3 Package matrix:** build and smoke-test the precompiled package and
   run deterministic SVG fixtures on every supported target.
 

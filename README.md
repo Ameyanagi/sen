@@ -6,10 +6,21 @@ Scientific plotting for Mojo.
 
 ## Install
 
-In a [Pixi](https://pixi.sh/) project, add the ecosystem channel and package:
+In a [Pixi](https://pixi.sh/) project, configure the ecosystem, Mojo, and
+Conda Forge channels in `pixi.toml`:
+
+```toml
+[workspace]
+channels = [
+    "https://ameyanagi.github.io/mojo-channel",
+    "https://conda.modular.com/max",
+    "conda-forge",
+]
+```
+
+Then add the package:
 
 ```sh
-pixi project channel add https://ameyanagi.github.io/mojo-channel
 pixi add mojo-sen
 ```
 
