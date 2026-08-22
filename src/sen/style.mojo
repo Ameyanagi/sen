@@ -45,6 +45,33 @@ struct MarkerStyle(Copyable, Equatable, ImplicitlyCopyable):
         return self._value == other._value
 
 
+def _parse_hex_color(color: StringSlice) raises -> String:
+    """Validate and lowercase a strict six-digit hexadecimal series color."""
+    var valid = color.byte_length() == 7
+    if valid:
+        valid = color[byte=:1] == "#"
+    if valid:
+        for index in range(1, 7):
+            var value = ord(color[byte=index])
+            if not (
+                (value >= ord("0") and value <= ord("9"))
+                or (value >= ord("a") and value <= ord("f"))
+                or (value >= ord("A") and value <= ord("F"))
+            ):
+                valid = False
+                break
+    if not valid:
+        raise Error(
+            (
+                "series color must be '#' followed by exactly six hexadecimal "
+                "digits, like '#1f77b4'; got '"
+            ),
+            color,
+            "'",
+        )
+    return String(color).lower()
+
+
 struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
     """Constructor-validated visual styling for one plotted series.
 
@@ -52,10 +79,12 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
     mutation of underscore-prefixed storage is out of contract; call
     ``validate`` explicitly when a checkpoint is needed. Automatic assignment
     deterministically walks insertion order and cycles through the first six
-    Tableau-10 colors; explicit slots never advance that counter.
+    Tableau-10 colors. Explicit palette slots and custom colors never advance
+    that counter; a custom color takes precedence over either palette mode.
     """
 
     var _palette_slot: Int
+    var _custom_color: String
     var _line_style: LineStyle
     var _marker_style: MarkerStyle
     var _line_width: Float64
@@ -63,6 +92,7 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
     def __init__(out self):
         """Construct deterministic automatic defaults without raising."""
         self._palette_slot = -1
+        self._custom_color = String()
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
         self._line_width = 1.5
@@ -81,11 +111,20 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
                 " is outside the valid range 0..5",
             )
         self._palette_slot = color_index
+        self._custom_color = String()
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
         self._line_width = 1.5
 
-    def with_width(self, width: Float64) raises -> Self:
+    def __init__(out self, *, color: StringSlice) raises:
+        """Construct a style with a normalized custom hexadecimal color."""
+        self._palette_slot = -1
+        self._custom_color = _parse_hex_color(color)
+        self._line_style = LineStyle.SOLID
+        self._marker_style = MarkerStyle.CIRCLE
+        self._line_width = 1.5
+
+    def with_line_width(self, width: Float64) raises -> Self:
         """Return a copy with ``width`` without changing the receiver.
 
         Raises when ``width`` is non-finite or not strictly positive.
@@ -97,23 +136,33 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         result._line_width = width
         return result^
 
+    def with_color(self, color: StringSlice) raises -> Self:
+        """Return a copy with a normalized custom hexadecimal color.
+
+        The custom color takes precedence over any stored explicit palette slot.
+        """
+        var result = self.copy()
+        result._custom_color = _parse_hex_color(color)
+        return result^
+
     def with_line_style(self, line_style: LineStyle) -> Self:
         """Return a deterministic copy with ``line_style``; this never raises."""
         var result = self.copy()
         result._line_style = line_style
         return result^
 
-    def with_marker(self, marker: MarkerStyle) -> Self:
+    def with_marker_style(self, marker: MarkerStyle) -> Self:
         """Return a deterministic copy with ``marker``; this never raises."""
         var result = self.copy()
         result._marker_style = marker
         return result^
 
     def validate(self) raises:
-        """Validate the stored palette slot and line width explicitly.
+        """Validate the stored palette slot, line width, and custom color.
 
         Raises when the slot is outside ``-1..5`` or the width is non-finite or
-        not strictly positive. Checks run in stable palette-then-width order.
+        not strictly positive, or when a nonempty custom color is not strict hex.
+        Checks run in stable palette-then-width-then-color order.
         """
         if self._palette_slot < -1 or self._palette_slot > 5:
             raise Error(
@@ -126,10 +175,16 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
                 "series line width must be finite and positive; got ",
                 self._line_width,
             )
+        if self._custom_color.byte_length() > 0:
+            _ = _parse_hex_color(self._custom_color)
 
     def palette_slot(self) -> Int:
         """Return deterministic ``-1`` or an explicit slot without raising."""
         return self._palette_slot
+
+    def color(self) -> String:
+        """Return the normalized custom color, or empty for palette assignment."""
+        return self._custom_color.copy()
 
     def line_style(self) -> LineStyle:
         """Return the exact line pattern without raising."""
@@ -147,6 +202,7 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         """Return exact deterministic field equality without raising."""
         return (
             self._palette_slot == other._palette_slot
+            and self._custom_color == other._custom_color
             and self._line_style == other._line_style
             and self._marker_style == other._marker_style
             and self._line_width == other._line_width

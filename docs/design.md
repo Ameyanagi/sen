@@ -47,17 +47,46 @@ validating borrowed coordinate spans while filling owned buffers in one pass;
 `append_all()` validates a complete batch before mutation. Bulk reads such as
 bounds operate directly on the coordinate buffers.
 
+Step, stem, and symmetric error-bar entry points lower to a single validated
+`LineSeries` per call. Disconnected stems, error bars, and caps use explicit
+segment starts, keeping one logical insertion slot and label without teaching
+renderers new line topology. Their destination buffers reserve the exact final
+size and are filled directly.
+
+Filled bars and histograms share `RectangleSeries`, a backend-neutral
+axis-aligned patch primitive with structure-of-arrays edge storage. One
+rectangle series may contain many bars while retaining one order entry, style,
+and label. Categorical bars store explicit x tick positions and labels on the
+figure; the renderer consumes that axis state without owning category
+semantics. Equal-width histogram construction validates and reduces finite data
+in native SIMD chunks, then performs one scalar scatter-count pass because bin
+destinations are data-dependent. It is linear in samples plus bins and never
+sorts or copies the input span.
+
+Filled areas share `LineSeries`' explicit segment topology and add one finite
+constant baseline. Each segment lowers to a closed device-space polygon, so
+rendering backends do not need to reinterpret missing values or repeat bounds
+and axis transformation rules.
+
 ## Deterministic SVG reference backend
 
-`render_svg` first lowers a figure to an internal ordered command list with no
-file I/O, then a hand-written encoder emits the complete document. Commands are
-ordered as background, plot frame, x axis and ticks, y axis and ticks, then line
-segments in figure order. Attributes are fixed left to right: the root uses
-`xmlns`, `width`, `height`, `viewBox`; rectangles use `x`, `y`, `width`, `height`,
-`fill`, followed when present by `stroke`, `stroke-width`; lines use `x1`, `y1`,
-`x2`, `y2`, `stroke`, `stroke-width`; text uses `x`, `y`, `fill`, `font-family`,
-`font-size`, `text-anchor`; and polylines use `points`, `fill`, `stroke`,
-`stroke-width`.
+`render_svg` calls the same package-root `build_render_plan` API available to
+other backends, then a hand-written encoder emits the complete document.
+Commands are ordered as background, plot frame, optional x then y grid lines, x
+axis followed by each tick/label pair, y axis followed by each tick/label pair,
+title/x-title/y-title when present, series primitives in figure insertion order,
+then the legend background and each labeled row's glyph/text pair in that same
+insertion order. The SVG adapter emits its clip definition before those commands
+and wraps the contiguous series block in one plot-area clip group. Attributes
+are fixed left to right: the root
+uses `xmlns`, `width`, `height`, `viewBox`; rectangles use `x`, `y`, `width`,
+`height`, `fill`, followed when present by `stroke`, `stroke-width`; lines use
+`x1`, `y1`, `x2`, `y2`, `stroke`, `stroke-width`; text uses `x`, `y`, `fill`,
+`font-family`, `font-size`, `text-anchor`; and polylines use `points`, `fill`,
+`stroke`, `stroke-width`. Area polygons additionally use a fixed fill opacity.
+Filled data rectangles and areas use the same insertion-indexed semantic
+classes as other series. An area legend glyph preserves its polygon's color,
+fixed opacity, outline width, and dash style.
 
 SVG geometry uses fixed decimal notation with at most three fractional digits.
 Values round half away from zero; trailing fractional zeros and a trailing point
@@ -75,7 +104,8 @@ also raise. Each connected line segment becomes one SVG `polyline`, preserving
 explicit gaps.
 
 The renderer returns a `String` ending in exactly one newline after `</svg>`.
-`save_svg` is the separate I/O boundary and writes the supplied bytes unchanged.
+`save_svg` is the separate I/O boundary; it creates missing parent directories
+and writes the supplied bytes unchanged.
 Regenerate the committed golden files from the real renderer with:
 
 ```sh

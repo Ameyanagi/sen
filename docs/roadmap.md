@@ -55,13 +55,13 @@ color role or defers configurable colors; no copied color type becomes public.
 
 ### S3 — Deterministic SVG backend
 
-- [ ] **S3.1 Render plan:** lower a figure into a small ordered drawing-command
+- [x] **S3.1 Render plan:** lower a figure into a small ordered drawing-command
   model that contains no file I/O.
-- [ ] **S3.2 SVG encoding:** encode lines, markers, axes, tick labels, clipping,
+- [x] **S3.2 SVG encoding:** encode lines, markers, axes, tick labels, clipping,
   and legends with deterministic attribute ordering and numeric formatting.
-- [ ] **S3.3 String API:** return complete SVG as a `String`; keep saving to a
+- [x] **S3.3 String API:** return complete SVG as a `String`; keep saving to a
   path in an explicit I/O helper.
-- [ ] **S3.4 Golden fixtures:** snapshot compact plots and separately test XML
+- [x] **S3.4 Golden fixtures:** snapshot compact plots and separately test XML
   escaping, coordinate transforms, and deterministic output.
 
 Dependency gate: SVG starts only after S1 and S2 contracts stabilize. SVG does
@@ -82,14 +82,21 @@ neither project changes its core semantic model merely to fit the other.
 
 ## v0.2 — Usability
 
-- Add histogram and error-bar semantics after line/scatter usage validates the
-  series model.
+- [x] Add the first basic parity family: nominal step placement, stems,
+  symmetric x/y errors, filled numeric/categorical bars, and validated
+  equal-width histograms.
+- [x] Add segmented filled areas through a backend-neutral render-plan command,
+  including baseline autoscaling, missing-data topology, SVG golden output, and
+  the simple `Plot.area` front door.
 - Add ergonomic builders only for repeated friction demonstrated by examples.
 - Submit a modular-community recipe when SVG plotting is useful by itself.
 
 ## v0.3 — Performance
 
-- Add reproducible large-series layout and SVG-encoding benchmarks.
+- [x] Add reproducible p50/p95 large-series plan, formatting, and I/O benchmarks
+  plus a compiled macOS Time Profiler workflow.
+- [x] Remove temporary fixed-decimal strings from the profiled SVG hotspot while
+  retaining byte-exact fixtures.
 - Introduce decimation only with explicit visual-error contracts.
 - Optimize measured bottlenecks without coupling plot semantics to a backend.
 

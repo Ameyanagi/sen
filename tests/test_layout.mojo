@@ -45,9 +45,14 @@ def test_plot_area_rejects_consumed_or_invalid_figure_size() raises:
         _ = plot_area(100.0, 80.0, Margins(0.0, 0.0, 40.0, 40.0))
     with assert_raises(contains="plot area must have positive width and height"):
         _ = plot_area(100.0, 80.0, Margins(60.0, 50.0, 0.0, 0.0))
-    with assert_raises(contains="figure size must be finite"):
+    with assert_raises(contains="got width = inf, height = 80.0"):
         _ = plot_area(Float64("inf"), 80.0, Margins(0.0, 0.0, 0.0, 0.0))
-    with assert_raises(contains="plot area must have positive width and height"):
+    with assert_raises(
+        contains=(
+            "got plot width = -100.0, plot height = 80.0 "
+            "(figure -100.0x80.0 minus margins)"
+        )
+    ):
         _ = plot_area(-100.0, 80.0, Margins(0.0, 0.0, 0.0, 0.0))
 
 

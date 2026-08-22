@@ -6,12 +6,15 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.0.0"
 
 [tasks]
-check = { depends-on = ["format-check", "test", "precompile"], description = "Run the complete validation suite" }
-example = { cmd = "mkdir -p output && mojo run -I src examples/two_series.mojo && mojo run -I src examples/semilog_decay.mojo && mojo run -I src examples/gapped_signal.mojo", description = "Render all example SVGs under output/" }
+bench = { cmd = "mojo run -I src benchmarks/bench_linear_scale.mojo", description = "Benchmark scalar and SIMD linear-scale mapping" }
+bench-svg = { cmd = "mojo build -I src -g1 benchmarks/bench_svg_pipeline.mojo -o .pixi/sen-svg-profile && .pixi/sen-svg-profile", description = "Build and run the profile-oriented SVG pipeline benchmark" }
+check = { depends-on = ["format-check", "readme-check", "test", "precompile"], description = "Run the complete validation suite" }
+example = { cmd = "mojo run -I src examples/two_series.mojo && mojo run -I src examples/semilog_decay.mojo && mojo run -I src examples/gapped_signal.mojo && mojo run -I src examples/basic_plots.mojo", description = "Render all example SVGs under output/" }
 format = { cmd = "bash scripts/format.sh", description = "Format Mojo source files" }
 format-check = { cmd = "bash scripts/check-format.sh", description = "Verify Mojo formatting without modifying source" }
 package = { cmd = "rattler-build build --recipe conda.recipe/recipe.yaml -c conda-forge -c https://conda.modular.com/max -c https://repo.prefix.dev/modular-community", description = "Build the local Conda package" }
 precompile = { cmd = "mojo precompile --Werror --warn-on-unstable-apis src/sen -o .pixi/sen.mojoc", description = "Precompile the package with warnings as errors" }
+readme-check = { cmd = "bash scripts/check-readme.sh", description = "Compile README Mojo examples" }
 regen-fixtures = { cmd = "mojo run -I src scripts/regen_fixtures.mojo", description = "Regenerate byte-exact SVG fixtures" }
 test = { cmd = "bash scripts/test.sh", description = "Run all Mojo TestSuite files" }
 

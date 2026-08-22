@@ -58,14 +58,32 @@ struct Margins(Copyable, Equatable, ImplicitlyCopyable):
             or not isfinite(self._top)
             or not isfinite(self._bottom)
         ):
-            raise Error("layout margins must be finite")
+            raise Error(
+                "layout margins must be finite; got left=",
+                self._left,
+                ", right=",
+                self._right,
+                ", top=",
+                self._top,
+                ", bottom=",
+                self._bottom,
+            )
         if (
             self._left < 0.0
             or self._right < 0.0
             or self._top < 0.0
             or self._bottom < 0.0
         ):
-            raise Error("layout margins must be non-negative")
+            raise Error(
+                "layout margins must be non-negative; got left=",
+                self._left,
+                ", right=",
+                self._right,
+                ", top=",
+                self._top,
+                ", bottom=",
+                self._bottom,
+            )
 
     def left(self) -> Float64:
         return self._left
@@ -139,9 +157,27 @@ struct Rect(Copyable, Equatable, ImplicitlyCopyable):
             or not isfinite(self._width)
             or not isfinite(self._height)
         ):
-            raise Error("layout rectangle values must be finite")
+            raise Error(
+                "layout rectangle values must be finite; got x=",
+                self._x,
+                ", y=",
+                self._y,
+                ", width=",
+                self._width,
+                ", height=",
+                self._height,
+            )
         if self._width < 0.0 or self._height < 0.0:
-            raise Error("layout rectangle width and height must be non-negative")
+            raise Error(
+                "layout rectangle width and height must be non-negative; got x=",
+                self._x,
+                ", y=",
+                self._y,
+                ", width=",
+                self._width,
+                ", height=",
+                self._height,
+            )
 
     def x(self) -> Float64:
         return self._x
@@ -173,9 +209,24 @@ def plot_area(
     right and increasing y moves down.
     """
     if not isfinite(figure_width) or not isfinite(figure_height):
-        raise Error("figure size must be finite")
+        raise Error(
+            "figure size must be finite; got width = ",
+            figure_width,
+            ", height = ",
+            figure_height,
+        )
     var width = figure_width - margins._left - margins._right
     var height = figure_height - margins._top - margins._bottom
     if width <= 0.0 or height <= 0.0:
-        raise Error("plot area must have positive width and height")
+        raise Error(
+            "plot area must have positive width and height; got plot width = ",
+            width,
+            ", plot height = ",
+            height,
+            " (figure ",
+            figure_width,
+            "x",
+            figure_height,
+            " minus margins)",
+        )
     return Rect._from_validated(margins._left, margins._top, width, height)

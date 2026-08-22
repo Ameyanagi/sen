@@ -2,6 +2,7 @@
 
 from std.collections import List
 from std.math import ceil, isfinite, log10
+from std.sys import simd_width_of
 
 from .series import DataBounds
 
@@ -77,6 +78,35 @@ def view_bounds(
     return DataBounds(x_min, x_max, y_min, y_max)
 
 
+def _stable_affine(
+    value: Float64,
+    input_start: Float64,
+    input_end: Float64,
+    output_start: Float64,
+    output_end: Float64,
+) -> Float64:
+    """Map one value without overflowing a representable affine fraction."""
+    var input_span = input_end - input_start
+    var output_span = output_end - output_start
+    # Opposite-sign finite endpoints can have an unrepresentable subtraction
+    # even though every in-domain interpolation fraction is representable.
+    # Halving before subtraction preserves that fraction without overflow.
+    var fraction: Float64
+    if isfinite(input_span):
+        fraction = (value - input_start) / input_span
+    else:
+        fraction = (value * 0.5 - input_start * 0.5) / (
+            input_end * 0.5 - input_start * 0.5
+        )
+    if isfinite(output_span):
+        return output_start + fraction * output_span
+
+    # A convex combination avoids subtracting opposite-sign output endpoints.
+    # Extrapolation may still be unrepresentable, as its mathematical result can
+    # lie outside Float64; render-plan lowering rejects such a coordinate.
+    return (1.0 - fraction) * output_start + fraction * output_end
+
+
 struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
     """A constructor-validated affine mapping between two finite intervals.
 
@@ -142,9 +172,26 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
             or not isfinite(self._range_start)
             or not isfinite(self._range_end)
         ):
-            raise Error("linear scale domain and range values must be finite")
+            raise Error(
+                (
+                    "linear scale domain and range values must be finite; got "
+                    "domain_start = "
+                ),
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+                ", range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if self._domain_start == self._domain_end:
-            raise Error("linear scale domain must not be degenerate")
+            raise Error(
+                "linear scale domain must not be degenerate; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
 
     def domain_start(self) -> Float64:
         """Return the validated first domain endpoint without raising."""
@@ -168,9 +215,13 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
             return self._range_start
         if value == self._domain_end:
             return self._range_end
-        return self._range_start + (value - self._domain_start) * (
-            self._range_end - self._range_start
-        ) / (self._domain_end - self._domain_start)
+        return _stable_affine(
+            value,
+            self._domain_start,
+            self._domain_end,
+            self._range_start,
+            self._range_end,
+        )
 
     def map_all(self, values: Span[Float64, ...], mut output: List[Float64]) raises:
         """Map ``values`` into an exact-size caller-owned output buffer.
@@ -178,11 +229,64 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
         Existing output elements are overwritten in place. The caller must
         provide one output element per input, so this batch fast path performs no
         allocation, buffer replacement, or hidden copy. A length mismatch raises
-        before mutation; scalar mapping proceeds deterministically by index.
+        before mutation. Complete native-width chunks use SIMD, and any remainder
+        uses the scalar mapping with identical endpoint-preserving semantics.
         """
         if len(values) != len(output):
-            raise Error("linear scale output buffer length must match input length")
-        for index in range(len(values)):
+            raise Error(
+                (
+                    "linear scale output buffer length must match input length; got "
+                    "len(values) = "
+                ),
+                len(values),
+                ", len(output) = ",
+                len(output),
+            )
+
+        comptime width = simd_width_of[DType.float64]()
+        var vector_end = len(values) - len(values) % width
+        if vector_end == 0:
+            for index in range(len(values)):
+                output[index] = self.map(values[index])
+            return
+
+        # Safety: length equality is established above, and vector_end is rounded
+        # down to a whole SIMD width. Every unsafe load and store therefore stays
+        # within both live contiguous buffers; neither pointer escapes this scope.
+        var input_ptr = values.unsafe_ptr()
+        var output_ptr = output.unsafe_ptr()
+        var domain_start = SIMD[DType.float64, width](self._domain_start)
+        var domain_end = SIMD[DType.float64, width](self._domain_end)
+        var range_start = SIMD[DType.float64, width](self._range_start)
+        var range_end = SIMD[DType.float64, width](self._range_end)
+        var scalar_domain_span = self._domain_end - self._domain_start
+        var scalar_range_span = self._range_end - self._range_start
+        var domain_span = SIMD[DType.float64, width](scalar_domain_span)
+        var range_span = SIMD[DType.float64, width](scalar_range_span)
+        var half = SIMD[DType.float64, width](0.5)
+        var one = SIMD[DType.float64, width](1.0)
+        for index in range(0, vector_end, width):
+            var value = input_ptr.unsafe_load[width=width](index)
+            var fraction: SIMD[DType.float64, width]
+            if isfinite(scalar_domain_span):
+                fraction = (value - domain_start) / domain_span
+            else:
+                fraction = (value * half - domain_start * half) / (
+                    domain_end * half - domain_start * half
+                )
+            var mapped: SIMD[DType.float64, width]
+            if isfinite(scalar_range_span):
+                mapped = range_start + fraction * range_span
+            else:
+                mapped = (one - fraction) * range_start + fraction * range_end
+
+            # Apply the second scalar branch first so domain_start keeps priority
+            # even if out-of-contract direct field mutation made endpoints equal.
+            mapped = value.eq(domain_end).select(range_end, mapped)
+            mapped = value.eq(domain_start).select(range_start, mapped)
+            output_ptr.unsafe_store[width=width](index, mapped)
+
+        for index in range(vector_end, len(values)):
             output[index] = self.map(values[index])
 
     def invert(self, value: Float64) raises -> Float64:
@@ -192,14 +296,23 @@ struct LinearScale(Copyable, Equatable, ImplicitlyCopyable):
         rejected here.
         """
         if self._range_start == self._range_end:
-            raise Error("degenerate linear scale range cannot be inverted")
+            raise Error(
+                "degenerate linear scale range cannot be inverted; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if value == self._range_start:
             return self._domain_start
         if value == self._range_end:
             return self._domain_end
-        return self._domain_start + (value - self._range_start) * (
-            self._domain_end - self._domain_start
-        ) / (self._range_end - self._range_start)
+        return _stable_affine(
+            value,
+            self._range_start,
+            self._range_end,
+            self._domain_start,
+            self._domain_end,
+        )
 
     def __eq__(self, other: Self) -> Bool:
         """Return exact deterministic endpoint equality without raising."""
@@ -274,22 +387,53 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
         """Validate the stored domain and range, naming an invalid value."""
         if not isfinite(self._domain_start):
             raise Error(
-                "log scale domain_start must be finite; got ", self._domain_start
+                "log scale domain_start must be finite; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
             )
         if not isfinite(self._domain_end):
-            raise Error("log scale domain_end must be finite; got ", self._domain_end)
+            raise Error(
+                "log scale domain_end must be finite; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
         if not isfinite(self._range_start):
-            raise Error("log scale range_start must be finite; got ", self._range_start)
+            raise Error(
+                "log scale range_start must be finite; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if not isfinite(self._range_end):
-            raise Error("log scale range_end must be finite; got ", self._range_end)
+            raise Error(
+                "log scale range_end must be finite; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if self._domain_start <= 0.0:
             raise Error(
-                "log scale domain_start must be positive; got ", self._domain_start
+                "log scale domain_start must be positive; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
             )
         if self._domain_end <= 0.0:
-            raise Error("log scale domain_end must be positive; got ", self._domain_end)
+            raise Error(
+                "log scale domain_end must be positive; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
         if self._domain_start == self._domain_end:
-            raise Error("log scale domain must not be degenerate")
+            raise Error(
+                "log scale domain must not be degenerate; got domain_start = ",
+                self._domain_start,
+                ", domain_end = ",
+                self._domain_end,
+            )
 
     def domain_start(self) -> Float64:
         """Return the validated first domain endpoint without revalidation."""
@@ -320,7 +464,12 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
     def invert(self, value: Float64) raises -> Float64:
         """Invert one range value; reject a degenerate range deterministically."""
         if self._range_start == self._range_end:
-            raise Error("degenerate log scale range cannot be inverted")
+            raise Error(
+                "degenerate log scale range cannot be inverted; got range_start = ",
+                self._range_start,
+                ", range_end = ",
+                self._range_end,
+            )
         if value == self._range_start:
             return self._domain_start
         if value == self._range_end:
@@ -338,7 +487,15 @@ struct LogScale(Copyable, Equatable, ImplicitlyCopyable):
         order and scalar evaluation order are deterministic.
         """
         if len(values) != len(output):
-            raise Error("log scale output buffer length must match input length")
+            raise Error(
+                (
+                    "log scale output buffer length must match input length; got "
+                    "len(values) = "
+                ),
+                len(values),
+                ", len(output) = ",
+                len(output),
+            )
         for index in range(len(values)):
             output[index] = self.map(values[index])
 
@@ -390,20 +547,54 @@ def linear_ticks(
     that cannot produce a finite positive step raise before ticks are returned.
     """
     if not isfinite(domain_start) or not isfinite(domain_end):
-        raise Error("linear tick domain values must be finite")
+        raise Error(
+            "linear tick domain values must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start == domain_end:
-        raise Error("linear tick domain must not be degenerate")
+        raise Error(
+            "linear tick domain must not be degenerate; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if target_count < 2:
-        raise Error("linear tick target count must be at least two")
+        raise Error("linear tick target count must be at least two; got ", target_count)
 
     var lo = min(domain_start, domain_end)
     var hi = max(domain_start, domain_end)
     var raw_step = (hi - lo) / Float64(target_count - 1)
     if not isfinite(raw_step) or raw_step <= 0.0:
-        raise Error("linear tick domain span must produce a finite positive step")
+        raise Error(
+            (
+                "linear tick domain span must produce a finite positive step; got "
+                "domain_start = "
+            ),
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+            ", target_count = ",
+            target_count,
+            ", raw_step = ",
+            raw_step,
+        )
     var step = _nearest_nice_step(raw_step)
     if not isfinite(step) or step <= 0.0:
-        raise Error("linear tick domain span must produce a finite positive step")
+        raise Error(
+            (
+                "linear tick domain span must produce a finite positive step; got "
+                "domain_start = "
+            ),
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+            ", target_count = ",
+            target_count,
+            ", step = ",
+            step,
+        )
 
     var tolerance = step * 1.0e-9
     var tick_index = ceil(lo / step - 1.0e-9)
@@ -432,15 +623,40 @@ def log_ticks(domain_start: Float64, domain_end: Float64) raises -> List[Float64
     ``linear_ticks`` and its deterministic 1-2-5 machinery instead.
     """
     if not isfinite(domain_start):
-        raise Error("log tick domain_start must be finite; got ", domain_start)
+        raise Error(
+            "log tick domain_start must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if not isfinite(domain_end):
-        raise Error("log tick domain_end must be finite; got ", domain_end)
+        raise Error(
+            "log tick domain_end must be finite; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start <= 0.0:
-        raise Error("log tick domain_start must be positive; got ", domain_start)
+        raise Error(
+            "log tick domain_start must be positive; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_end <= 0.0:
-        raise Error("log tick domain_end must be positive; got ", domain_end)
+        raise Error(
+            "log tick domain_end must be positive; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
     if domain_start == domain_end:
-        raise Error("log tick domain must not be degenerate")
+        raise Error(
+            "log tick domain must not be degenerate; got domain_start = ",
+            domain_start,
+            ", domain_end = ",
+            domain_end,
+        )
 
     var lo = min(domain_start, domain_end)
     var hi = max(domain_start, domain_end)

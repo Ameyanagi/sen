@@ -90,7 +90,7 @@ def styled_series_figure() raises -> Figure:
 
     var dashed = SeriesStyle()
     dashed = dashed.with_line_style(LineStyle.DASHED)
-    dashed = dashed.with_width(2.5)
+    dashed = dashed.with_line_width(2.5)
     var dotted = SeriesStyle(color_index=4)
     dotted = dotted.with_line_style(LineStyle.DOTTED)
 
@@ -116,7 +116,7 @@ def markers_figure() raises -> Figure:
     for index in range(len(markers)):
         var xs: List[Float64] = [Float64(index)]
         var ys: List[Float64] = [Float64(index % 2)]
-        var style = SeriesStyle().with_marker(markers[index])
+        var style = SeriesStyle().with_marker_style(markers[index])
         figure.scatter(xs, ys, style=style)
     return figure^
 
@@ -128,7 +128,7 @@ def legend_figure() raises -> Figure:
     var marker_x: List[Float64] = [1.0]
     var marker_y: List[Float64] = [1.25]
     var dashed = SeriesStyle().with_line_style(LineStyle.DASHED)
-    var square = SeriesStyle().with_marker(MarkerStyle.SQUARE)
+    var square = SeriesStyle().with_marker_style(MarkerStyle.SQUARE)
     var figure = Figure()
     figure.line(xs, first_y, label="observed")
     figure.line(xs, second_y, label="forecast", style=dashed)
@@ -159,6 +159,14 @@ def semilog_decay_figure() raises -> Figure:
     figure.line(xs, ys)
     figure.set_y_scale(AxisKind.LOG10)
     figure.set_grid(True)
+    return figure^
+
+
+def area_figure() raises -> Figure:
+    var xs: List[Float64] = [0.0, 1.0, 2.0, 3.0]
+    var ys: List[Float64] = [1.0, 3.0, 2.0, 4.0]
+    var figure = Figure()
+    figure.area(xs, ys, baseline=0.0, label="signal")
     return figure^
 
 
@@ -224,4 +232,9 @@ def main() raises:
         "tests/fixtures/semilog_decay.svg",
         render_svg(semilog, 200.0, 140.0, margins),
     )
-    print("Regenerated 12 SVG fixtures under tests/fixtures/.")
+    var area = area_figure()
+    save_svg(
+        "tests/fixtures/area.svg",
+        render_svg(area, 160.0, 100.0, margins),
+    )
+    print("Regenerated 13 SVG fixtures under tests/fixtures/.")
