@@ -5,8 +5,8 @@ Milestones advance only through the explicit gates below; the semantic model
 must remain usable without any renderer.
 
 Routine `pixi run check` covers formatting, tests, and `.mojoc` precompilation.
-`pixi run package` builds and tests the installed artifact in the Linux CI
-package job and remains available as a local release gate.
+`pixi run package` builds and tests the installed artifact in CI, across all
+supported native targets for releases, and as a local release gate.
 
 ## v0.1 — Foundation
 
@@ -26,13 +26,13 @@ the installed package; empty state and bounds behavior have invariant tests.
 
 ### S1 — Axes and scales
 
-- [ ] **S1.1 Linear scale:** map a validated data domain to a finite output
+- [x] **S1.1 Linear scale:** map a validated data domain to a finite output
   range, with explicit reversed-domain and degenerate-domain behavior.
-- [ ] **S1.2 Axis model:** define orientation, domain, label, and scale ownership
+- [x] **S1.2 Axis model:** define orientation, domain, label, and scale ownership
   without pixel, SVG, or Kagerou types.
-- [ ] **S1.3 Tick locator:** generate deterministic human-readable linear ticks
+- [x] **S1.3 Tick locator:** generate deterministic human-readable linear ticks
   for positive, negative, tiny, and large domains.
-- [ ] **S1.4 View bounds:** combine visible series extents and explicit axis
+- [x] **S1.4 View bounds:** combine visible series extents and explicit axis
   overrides, with reference fixtures for empty and constant data.
 
 Dependency gate: S1 starts after S0.4 fixes missing-data semantics. Its tests
@@ -40,13 +40,13 @@ must use only Mojo standard-library values.
 
 ### S2 — Plot semantics and layout
 
-- [ ] **S2.1 Line style:** add semantic stroke width, dash, marker, and color
+- [x] **S2.1 Line style:** add semantic stroke width, dash, marker, and color
   roles without importing backend geometry.
-- [ ] **S2.2 Scatter series:** add marker-only series sharing the S0 data and
+- [x] **S2.2 Scatter series:** add marker-only series sharing the S0 data and
   missing-data contracts.
-- [ ] **S2.3 Figure layout:** compute title, plot-area, axes, and legend boxes in
+- [x] **S2.3 Figure layout:** compute title, plot-area, axes, and legend boxes in
   backend-independent logical coordinates.
-- [ ] **S2.4 Legend entries:** derive stable labels and samples from visible
+- [x] **S2.4 Legend entries:** derive stable labels and samples from visible
   series without rendering them.
 
 Akari gate: pin Akari only after its normalized color value and interpolation
@@ -69,11 +69,11 @@ not require Kagerou and remains the portable reference backend.
 
 ### S4 — Release hardening
 
-- [ ] **S4.1 Root audit:** export only stable semantic values and the SVG entry
+- [x] **S4.1 Root audit:** export only stable semantic values and the SVG entry
   point; keep layout and encoder implementation types internal.
 - [ ] **S4.2 Numeric-buffer proof:** demonstrate adapters from at least two
   Mojo-native collection/span shapes without defining a universal Sen array.
-- [ ] **S4.3 Package matrix:** build and smoke-test the precompiled package and
+- [x] **S4.3 Package matrix:** build and smoke-test the precompiled package and
   run deterministic SVG fixtures on every supported target.
 
 Kagerou gate: a native backend is a post-v0.1 adapter. It starts only after

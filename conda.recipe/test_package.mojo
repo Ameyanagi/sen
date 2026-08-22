@@ -1,4 +1,12 @@
-from sen import Figure, LineSeries, Margins, Plot, PlotPoint, build_render_plan
+from sen import (
+    Figure,
+    LineSeries,
+    Margins,
+    Plot,
+    PlotPoint,
+    SeriesStyle,
+    build_render_plan,
+)
 from std.collections import List
 from std.testing import assert_true
 
@@ -25,6 +33,17 @@ def main() raises:
     var x: List[Float64] = [0.0, 1.0, 2.0]
     var y: List[Float64] = [1.0, 2.0, 1.0]
     var plot = Plot()
+    plot.line(x, y, label="trend", style=SeriesStyle(color="#336699"))
     plot.area(x, y, label="area")
+    plot.title("Installed Sen")
+    plot.xlabel("x")
+    plot.ylabel("y")
+    plot.grid()
     var svg = plot.render_svg(240.0, 160.0)
-    assert_true('<polygon class="sen-series-0"' in svg)
+    assert_true(svg.startswith('<svg xmlns="http://www.w3.org/2000/svg"'))
+    assert_true('<polyline class="sen-series-0"' in svg)
+    assert_true('stroke="#336699"' in svg)
+    assert_true('<polygon class="sen-series-1"' in svg)
+    assert_true('<rect class="sen-legend"' in svg)
+    assert_true('<text class="sen-title"' in svg)
+    assert_true('<line class="sen-grid"' in svg)
