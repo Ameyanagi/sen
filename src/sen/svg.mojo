@@ -630,6 +630,17 @@ def _encode_svg(plan: RenderPlan) raises -> String:
     return svg^
 
 
+def encode_svg(plan: RenderPlan) raises -> String:
+    """Validate and encode an already-built renderer-neutral plan as SVG.
+
+    Use this boundary when one ``RenderPlan`` is shared with several encoders or
+    inspected before output.  The plan is not rebuilt and no file I/O occurs.
+    Direct low-level mutation is checked before any SVG bytes are returned.
+    """
+    plan.validate()
+    return _encode_svg(plan)
+
+
 def render_svg(
     figure: Figure,
     width: Float64,
@@ -680,7 +691,7 @@ def render_svg(
     return render_svg(figure, width, height, Margins(40.0, 12.0, 12.0, 28.0))
 
 
-def save_svg(path: StringSlice, svg: StringSlice) raises:
+def write_svg(path: StringSlice, svg: StringSlice) raises:
     """Write supplied SVG bytes; missing parent directories are created."""
     var slash_index = path.byte_length() - 1
     while slash_index >= 0:
@@ -691,3 +702,8 @@ def save_svg(path: StringSlice, svg: StringSlice) raises:
         makedirs(path[byte=:slash_index], exist_ok=True)
     with open(path, "w") as output:
         output.write(svg)
+
+
+def save_svg(path: StringSlice, svg: StringSlice) raises:
+    """Compatibility alias for ``write_svg``."""
+    write_svg(path, svg)

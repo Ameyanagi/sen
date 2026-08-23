@@ -1,4 +1,5 @@
 from sen import (
+    AreaSeries,
     AxisKind,
     DataBounds,
     Figure,
@@ -6,7 +7,9 @@ from sen import (
     LineSeries,
     MissingPolicy,
     PlotPoint,
+    RectangleSeries,
     ScatterSeries,
+    StepMode,
 )
 from std.collections import List
 from std.testing import (
@@ -389,7 +392,8 @@ def test_figure_bounds_reject_figures_without_points() raises:
     var empty = Figure()
     with assert_raises(
         contains=(
-            "figure has no series; add data with line() or scatter() before rendering"
+            "figure has no series; add a line, scatter, area, bar, or histogram "
+            "before rendering"
         )
     ):
         _ = empty.bounds()
@@ -400,6 +404,14 @@ def test_figure_bounds_reject_figures_without_points() raises:
         contains="figure has 1 series but all are empty; add points before rendering"
     ):
         _ = only_empty_lines.bounds()
+
+    var only_empty_filled = Figure()
+    only_empty_filled.add_area(AreaSeries(LineSeries(), 0.0))
+    only_empty_filled.add_rectangles(RectangleSeries())
+    with assert_raises(
+        contains="figure has 2 series but all are empty; add points before rendering"
+    ):
+        _ = only_empty_filled.bounds()
 
 
 def test_figure_owns_renderer_neutral_series() raises:
@@ -674,14 +686,89 @@ def test_figure_lower_level_add_paths_store_given_or_empty_labels() raises:
     line.append(PlotPoint(0.0, 1.0))
     var scatter = ScatterSeries()
     scatter.append(PlotPoint(2.0, 3.0))
+    var area = AreaSeries(LineSeries(), 0.0)
+    var rectangles = RectangleSeries()
     var figure = Figure()
 
     figure.add_line(line^, label="owned line")
     figure.add_scatter(scatter^)
+    figure.add_area(area^, label="owned area")
+    figure.add_rectangles(rectangles^, label="owned rectangles")
 
     assert_equal(figure.line_label(0), "owned line")
     assert_equal(figure.scatter_label(0), "")
+    assert_equal(figure.area_label(0), "owned area")
+    assert_equal(figure.rectangle_label(0), "owned rectangles")
     assert_true(not figure.is_empty())
+
+    with assert_raises(contains="figure area index must be within [0, 1); got 1"):
+        _ = figure.area(1)
+    with assert_raises(contains="figure rectangle index must be within [0, 1); got -1"):
+        _ = figure.rectangles(-1)
+    with assert_raises(contains="figure area-label index must be within [0, 1); got 2"):
+        _ = figure.area_label(2)
+    with assert_raises(
+        contains="figure rectangle-label index must be within [0, 1); got 3"
+    ):
+        _ = figure.rectangle_label(3)
+
+
+def test_public_series_nominals_validate_both_discriminant_boundaries() raises:
+    MissingPolicy.ERROR.validate()
+    MissingPolicy.DROP.validate()
+    StepMode.PRE.validate()
+    StepMode.MID.validate()
+    AxisKind.LINEAR.validate()
+    AxisKind.LOG10.validate()
+    LegendPosition.UPPER_RIGHT.validate()
+    LegendPosition.NONE.validate()
+
+    with assert_raises(contains="missing policy is outside Sen's vocabulary"):
+        MissingPolicy(_value=-1).validate()
+    with assert_raises(contains="missing policy is outside Sen's vocabulary"):
+        MissingPolicy(_value=3).validate()
+    with assert_raises(contains="step mode is outside Sen's vocabulary"):
+        StepMode(_value=-1).validate()
+    with assert_raises(contains="step mode is outside Sen's vocabulary"):
+        StepMode(_value=3).validate()
+    with assert_raises(contains="axis kind is outside Sen's vocabulary"):
+        AxisKind(_value=-1).validate()
+    with assert_raises(contains="axis kind is outside Sen's vocabulary"):
+        AxisKind(_value=2).validate()
+    with assert_raises(contains="legend position is outside Sen's vocabulary"):
+        LegendPosition(_value=-1).validate()
+    with assert_raises(contains="legend position is outside Sen's vocabulary"):
+        LegendPosition(_value=5).validate()
+
+
+def test_ingestion_rejects_invalid_nominals_before_fallback() raises:
+    var empty = List[Float64]()
+    var figure = Figure()
+    with assert_raises(contains="missing policy is outside Sen's vocabulary"):
+        figure.line(empty, empty, missing=MissingPolicy(_value=3))
+    with assert_raises(contains="missing policy is outside Sen's vocabulary"):
+        figure.scatter(empty, empty, missing=MissingPolicy(_value=-1))
+    with assert_raises(contains="missing policy is outside Sen's vocabulary"):
+        figure.area(empty, empty, missing=MissingPolicy(_value=3))
+    with assert_raises(contains="step mode is outside Sen's vocabulary"):
+        figure.step(empty, empty, mode=StepMode(_value=-1))
+
+
+def test_figure_validation_covers_axis_and_legend_nominals() raises:
+    var figure = Figure()
+    figure._x_scale = AxisKind(_value=-1)
+    with assert_raises(contains="axis kind is outside Sen's vocabulary"):
+        figure.validate()
+
+    figure._x_scale = AxisKind.LINEAR
+    figure._y_scale = AxisKind(_value=2)
+    with assert_raises(contains="axis kind is outside Sen's vocabulary"):
+        figure.validate()
+
+    figure._y_scale = AxisKind.LINEAR
+    figure._legend_position = LegendPosition(_value=5)
+    with assert_raises(contains="legend position is outside Sen's vocabulary"):
+        figure.validate()
 
 
 def test_figure_bounds_and_validation_cover_lines_and_scatters() raises:
@@ -798,9 +885,111 @@ def test_figure_axis_limits_validate_and_round_trip() raises:
     assert_true(y_limits[0] == 10.0)
     assert_true(y_limits[1] == 20.0)
 
+    figure.clear_x_limits()
+    figure.clear_y_limits()
+    assert_true(not figure.x_limits())
+    assert_true(not figure.y_limits())
+
+
+def test_figure_y_ticks_are_owned_atomic_checked_and_clearable() raises:
+    var positions: List[Float64] = [-1.0, 0.5, 3.0]
+    var labels: List[String] = ["low", "middle", "high"]
+    var figure = Figure()
+    assert_false(figure.has_explicit_y_ticks())
+    assert_equal(figure.y_tick_count(), 0)
+
+    figure.set_y_ticks(positions, labels)
+    positions[1] = 99.0
+    labels[1] = String("mutated")
+    assert_true(figure.has_explicit_y_ticks())
+    assert_equal(figure.y_tick_count(), 3)
+    assert_true(figure.y_tick_position(1) == 0.5)
+    assert_equal(figure.y_tick_label(1), "middle")
+
+    var too_few_labels: List[String] = ["one"]
+    with assert_raises(contains="y tick position length 3 must equal label length 1"):
+        figure.set_y_ticks(positions, too_few_labels)
+    assert_equal(figure.y_tick_count(), 3)
+    assert_true(figure.y_tick_position(1) == 0.5)
+
+    var invalid_positions: List[Float64] = [1.0, Float64("nan")]
+    var invalid_labels: List[String] = ["one", "bad"]
+    with assert_raises(contains="y tick position at index 1 must be finite; got nan"):
+        figure.set_y_ticks(invalid_positions, invalid_labels)
+    assert_equal(figure.y_tick_count(), 3)
+    assert_equal(figure.y_tick_label(1), "middle")
+
+    figure.clear_y_ticks()
+    assert_false(figure.has_explicit_y_ticks())
+    assert_equal(figure.y_tick_count(), 0)
+    with assert_raises(contains="y tick index must be within [0, 0); got 0"):
+        _ = figure.y_tick_position(0)
+    with assert_raises(contains="y tick index must be within [0, 0); got 0"):
+        _ = figure.y_tick_label(0)
+
+
+def test_figure_x_ticks_are_owned_atomic_checked_and_clearable() raises:
+    var positions: List[Float64] = [-1.0, 0.5, 3.0]
+    var labels: List[String] = ["left", "middle", "right"]
+    var figure = Figure()
+    assert_false(figure.has_explicit_x_ticks())
+
+    figure.set_x_ticks(positions, labels)
+    positions[1] = 99.0
+    labels[1] = String("mutated")
+    assert_equal(figure.x_tick_count(), 3)
+    assert_true(figure.x_tick_position(1) == 0.5)
+    assert_equal(figure.x_tick_label(1), "middle")
+
+    var too_few_labels: List[String] = ["one"]
+    with assert_raises(contains="x tick position length 3 must equal label length 1"):
+        figure.set_x_ticks(positions, too_few_labels)
+    assert_true(figure.x_tick_position(1) == 0.5)
+
+    var invalid_positions: List[Float64] = [1.0, Float64("nan")]
+    var invalid_labels: List[String] = ["one", "bad"]
+    with assert_raises(contains="x tick position at index 1 must be finite; got nan"):
+        figure.set_x_ticks(invalid_positions, invalid_labels)
+    assert_equal(figure.x_tick_label(1), "middle")
+
+    figure.clear_x_ticks()
+    assert_false(figure.has_explicit_x_ticks())
+    assert_equal(figure.x_tick_count(), 0)
+    with assert_raises(contains="x tick index must be within [0, 0); got 0"):
+        _ = figure.x_tick_position(0)
+    with assert_raises(contains="x tick index must be within [0, 0); got 0"):
+        _ = figure.x_tick_label(0)
+
+
+def test_figure_validation_checks_explicit_y_tick_storage() raises:
+    var figure = Figure()
+    figure._has_y_ticks = True
+    figure._y_tick_positions.append(1.0)
+    with assert_raises(
+        contains=(
+            "figure y tick positions must match y tick labels; got 1 positions for 0"
+            " labels"
+        )
+    ):
+        figure.validate()
+
+    figure._y_tick_labels.append(String("one"))
+    figure._y_tick_positions[0] = Float64("inf")
+    with assert_raises(contains="y tick position at index 0 must be finite; got inf"):
+        figure.validate()
+
+    figure._has_y_ticks = False
+    figure._y_tick_positions[0] = 1.0
+    with assert_raises(
+        contains="automatic y ticks must not retain explicit tick storage"
+    ):
+        figure.validate()
+
 
 def test_figure_axis_limits_reject_invalid_values_with_context() raises:
     var figure = Figure()
+    figure.set_x_limits(-2.0, 4.0)
+    figure.set_y_limits(-3.0, 5.0)
     with assert_raises(contains="lo = 3.0, hi = 3.0"):
         figure.set_x_limits(3.0, 3.0)
     with assert_raises(contains="lo = 4.0, hi = -1.0"):
@@ -816,6 +1005,11 @@ def test_figure_axis_limits_reject_invalid_values_with_context() raises:
         figure.set_y_limits(5.0, 4.0)
     with assert_raises(contains="lo = -inf, hi = 1.0"):
         figure.set_y_limits(Float64("-inf"), 1.0)
+
+    var x_limits = figure.x_limits().value()
+    var y_limits = figure.y_limits().value()
+    assert_true(x_limits[0] == -2.0 and x_limits[1] == 4.0)
+    assert_true(y_limits[0] == -3.0 and y_limits[1] == 5.0)
 
 
 def main() raises:

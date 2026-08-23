@@ -50,13 +50,15 @@ def main() raises:
     var fitted: List[Float64] = [1.0, 2.0, 3.0, 4.0, 5.0]
     var measured: List[Float64] = [0.9, 2.2, 2.8, 4.1, 5.2]
 
-    var plot = Plot()
-    plot.line(x, fitted, label="fit")
-    plot.scatter(x, measured, label="measured")
-    plot.title("Calibration")
-    plot.xlabel("input")
-    plot.ylabel("response")
-    plot.grid()
+    var plot = (
+        Plot()
+        .with_line(x, fitted, label="fit")
+        .with_scatter(x, measured, label="measured")
+        .with_title("Calibration")
+        .with_xlabel("input")
+        .with_ylabel("response")
+        .with_grid()
+    )
 
     plot.save_svg("output/two_series.svg", width=720.0, height=480.0)
 ```
@@ -67,7 +69,41 @@ From a checkout, run it with `pixi run mojo run -I src my_plot.mojo` (or
 returns the SVG document when an in-memory result is more convenient.
 `Plot.save_svg(path)` renders once at 640x480 and replaces `path`; optional
 width and height arguments select a different size. The lower-level `Figure`,
-free `render_svg`, and free `save_svg` APIs remain available.
+free `render_svg`, and compatibility `save_svg(path, svg)` APIs remain
+available. New code that already has SVG bytes should use the unambiguous
+`write_svg(path, svg)` name.
+
+Every `Plot` data and configuration mutator has a consuming `with_*`
+counterpart for fluent construction. The consuming methods return an owned
+`Plot`, not a reference, so chaining an rvalue moves the same plot through the
+expression without copying its retained series. The original mutable calls
+remain supported when incremental control flow is clearer:
+
+```mojo
+from sen import Plot
+from std.collections import List
+
+
+def main() raises:
+    var x: List[Float64] = [0.0, 1.0]
+    var y: List[Float64] = [1.0, 2.0]
+    var plot = Plot()
+    plot.line(x, y)
+    plot.title("Mutable construction")
+    var svg = plot.render_svg()
+```
+
+To continue a consuming chain from a named plot without copying it, transfer
+the value explicitly: `var updated = plot^.with_grid()`.
+
+`Plot.figure()` borrows the underlying renderer-neutral `Figure`, while
+`into_figure()` consumes the plot and transfers that figure without copying its
+series. Passing an owned `Figure` to `Plot(figure^)` performs the reverse
+transfer. `Plot.build_render_plan()` prepares a backend-neutral plan; encode it
+without repeating layout work using `encode_svg(plan)`, then persist the result
+with `write_svg(path, svg)`. The geometry overloads on `build_render_plan`,
+`render_svg`, and `save_svg` accept explicit `Margins` when layout control is
+required.
 
 ## Scope
 
@@ -89,8 +125,10 @@ Tableau-10 colors in insertion order. Use `SeriesStyle(color="#rrggbb")` or
 `.with_color(...)` for an explicit color, and `.with_line_width(...)` or
 `.with_marker_style(...)` for further styling. Select `AxisKind.LOG10` with
 `xscale` or `yscale`; log data and limits must be positive. Explicit limits are
-exact, `grid()` adds major gridlines, and a legend renders if and only if at
-least one series has a nonempty label unless
+exact and `clear_xlim()` / `clear_ylim()` restore automatic bounds. `xticks()`
+and `yticks()` install owned positions and labels; their matching clear calls
+restore automatic ticks. `grid()` adds major gridlines, and a legend renders if
+and only if at least one series has a nonempty label unless
 `legend(LegendPosition.NONE)` suppresses it.
 
 The complete basic family uses the same stateful vocabulary:
@@ -98,6 +136,7 @@ The complete basic family uses the same stateful vocabulary:
 `errorbar(x, y, y_error)` or `errorbar(x, y, x_error, y_error)`,
 `area(x, y, baseline=0.0)`, `bar(x, height)`, `bar(categories, height)`, and
 `histogram(data, bins=10)`.
+Prefix any of these calls with `with_` to use it in a fluent `Plot` chain.
 See [Basic 2D plots](docs/basic-plots.md) for validation, range, category, and
 performance contracts, and [the runnable example](examples/basic_plots.mojo)
 for SVG output.

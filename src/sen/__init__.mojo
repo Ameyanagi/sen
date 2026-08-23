@@ -27,4 +27,4 @@ from .series import (
     StepMode,
 )
 from .style import LineStyle, MarkerStyle, SeriesStyle
-from .svg import render_svg, save_svg
+from .svg import encode_svg, render_svg, save_svg, write_svg

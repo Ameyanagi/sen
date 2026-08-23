@@ -5,6 +5,59 @@ vocabulary as `line` and `scatter`. Every call inserts exactly one logical
 series, so automatic color, labels, legends, and SVG draw order follow call
 order even when the plot lowers to many line segments or rectangles.
 
+## Mutable and fluent construction
+
+Every `Plot` mutator remains available for statement-oriented construction.
+Its consuming counterpart returns an owned `Plot`, which supports direct
+chains without returning references. Data and configuration calls add a
+`with_` prefix; clear-axis operations use descriptive `with_auto_*` names:
+
+```mojo
+var svg = (
+    Plot()
+    .with_line(x, fitted, label="fit")
+    .with_scatter(x, measured, label="measured")
+    .with_title("Calibration")
+    .with_grid()
+    .render_svg()
+)
+```
+
+This mapping covers `line`, `scatter`, `area`, `step`, `stem`, both `errorbar`
+forms, numeric and categorical `bar`, both `histogram` forms, and all `Plot`
+configuration calls. Each consuming call moves the same `Plot` through an
+rvalue chain and delegates to the corresponding mutable mutator, preserving
+validation, insertion order, data ownership, and rendered bytes. Use
+`figure()` for an immutable borrow of the renderer-neutral figure,
+`into_figure()` for an ownership transfer, or `build_render_plan()` to prepare
+backend-neutral commands directly. Continuing a consuming chain from a named
+plot uses an explicit transfer, such as `var updated = plot^.with_grid()`.
+
+## Axes and prepared output
+
+Both axes expose the same state transitions. `xlim(lo, hi)` / `ylim(lo, hi)`
+set exact limits, while `clear_xlim()` / `clear_ylim()` restore automatic
+bounds. `xticks(positions, labels)` and `yticks(positions, labels)` atomically
+copy explicit ticks into the plot; `clear_xticks()` and `clear_yticks()` restore
+automatic locations and numeric labels. Fluent chains use `with_xlim`,
+`with_ylim`, `with_xticks`, `with_yticks`, and the corresponding `with_auto_*`
+methods.
+
+For workflows that inspect or reuse backend-neutral commands, build once and
+encode separately:
+
+```mojo
+from sen import encode_svg, write_svg
+
+var plan = plot.build_render_plan(720.0, 480.0)
+var svg = encode_svg(plan)
+write_svg("output/plot.svg", svg)
+```
+
+`Figure` and `Plot` both provide in-memory rendering and saving overloads with
+explicit `Margins`. The old free `save_svg(path, svg)` remains a compatibility
+alias for `write_svg`; it does not render a figure.
+
 ## Step and stem
 
 `step(x, y, mode=StepMode.PRE)` accepts equal-length finite coordinate spans.

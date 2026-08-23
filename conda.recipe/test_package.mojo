@@ -6,6 +6,7 @@ from sen import (
     PlotPoint,
     SeriesStyle,
     build_render_plan,
+    encode_svg,
 )
 from std.collections import List
 from std.testing import assert_true
@@ -32,13 +33,20 @@ def main() raises:
 
     var x: List[Float64] = [0.0, 1.0, 2.0]
     var y: List[Float64] = [1.0, 2.0, 1.0]
-    var plot = Plot()
-    plot.line(x, y, label="trend", style=SeriesStyle(color="#336699"))
-    plot.area(x, y, label="area")
-    plot.title("Installed Sen")
-    plot.xlabel("x")
-    plot.ylabel("y")
-    plot.grid()
+    var plot = (
+        Plot()
+        .with_line(x, y, label="trend", style=SeriesStyle(color="#336699"))
+        .with_area(x, y, label="area")
+        .with_title("Installed Sen")
+        .with_xlabel("x")
+        .with_ylabel("y")
+        .with_grid()
+    )
+    plot.validate()
+    var plot_plan = plot.build_render_plan(240.0, 160.0)
+    assert_true(plot_plan.command_count() > 0)
+    var prepared_svg = encode_svg(plot_plan)
+    assert_true(prepared_svg.startswith('<svg xmlns="http://www.w3.org/2000/svg"'))
     var svg = plot.render_svg(240.0, 160.0)
     assert_true(svg.startswith('<svg xmlns="http://www.w3.org/2000/svg"'))
     assert_true('<polyline class="sen-series-0"' in svg)

@@ -490,6 +490,7 @@ def build_render_plan(
     geometry, domains, logarithmic values, or empty input raises before a plan
     is returned.
     """
+    figure._validate_render_configuration()
     var title = figure.title().copy()
     var x_label = figure.x_label().copy()
     var y_label = figure.y_label().copy()
@@ -532,6 +533,16 @@ def build_render_plan(
                 _diagnostic_value(y_limits.value()[0]),
             )
         _validate_log_series(figure, "y")
+        if figure.has_explicit_y_ticks():
+            for index in range(figure.y_tick_count()):
+                if figure.y_tick_position(index) <= 0.0:
+                    raise Error(
+                        "log-scale y tick positions must be positive; tick ",
+                        index,
+                        " has value = ",
+                        _diagnostic_value(figure.y_tick_position(index)),
+                        "; replace it or use AxisKind.LINEAR",
+                    )
     var autoscale_x_min = data_bounds.x_min()
     var autoscale_x_max = data_bounds.x_max()
     if x_limits:
@@ -598,6 +609,7 @@ def build_render_plan(
     var x_ticks: List[Float64]
     var explicit_x_tick_labels = List[String]()
     var y_ticks: List[Float64]
+    var explicit_y_tick_labels = List[String]()
     if figure.has_explicit_x_ticks():
         x_ticks = List[Float64](capacity=figure.x_tick_count())
         explicit_x_tick_labels = List[String](capacity=figure.x_tick_count())
@@ -611,14 +623,53 @@ def build_render_plan(
         x_ticks = log_ticks(x_domain[0], x_domain[1])
     else:
         x_ticks = linear_ticks(x_domain[0], x_domain[1])
-    if y_axis_kind == AxisKind.LOG10:
+    if figure.has_explicit_y_ticks():
+        y_ticks = List[Float64](capacity=figure.y_tick_count())
+        explicit_y_tick_labels = List[String](capacity=figure.y_tick_count())
+        for index in range(figure.y_tick_count()):
+            var position = figure.y_tick_position(index)
+            if position < y_domain[0] or position > y_domain[1]:
+                continue
+            y_ticks.append(position)
+            explicit_y_tick_labels.append(figure.y_tick_label(index).copy())
+    elif y_axis_kind == AxisKind.LOG10:
         y_ticks = log_ticks(y_domain[0], y_domain[1])
     else:
         y_ticks = linear_ticks(y_domain[0], y_domain[1])
     var x_step = _tick_step(x_ticks, x_domain[1] - x_domain[0])
     var y_step = _tick_step(y_ticks, y_domain[1] - y_domain[0])
 
-    var commands = List[DrawCommand]()
+    # Size command-heavy plans before appending any command. Series topology and
+    # tick lists already expose every data-dependent command count; the legend
+    # allowance deliberately assumes that every series is labeled so this sizing
+    # pass does not duplicate legend text measurement. Small plans retain List's
+    # default growth path because reserving them did not improve their profile.
+    var command_capacity = 4 + 2 * (len(x_ticks) + len(y_ticks))
+    if figure.grid_enabled():
+        command_capacity += len(x_ticks) + len(y_ticks)
+    if title.byte_length() > 0:
+        command_capacity += 1
+    if x_label.byte_length() > 0:
+        command_capacity += 1
+    if y_label.byte_length() > 0:
+        command_capacity += 1
+    for order_index in range(figure._series_count()):
+        var series_index = figure._series_index(order_index)
+        if figure._series_is_line(order_index):
+            command_capacity += figure.line(series_index).segment_count()
+        elif figure._series_is_area(order_index):
+            command_capacity += figure.area(series_index).segment_count()
+        elif figure._series_is_rectangle(order_index):
+            command_capacity += figure.rectangles(series_index).rectangle_count()
+        else:
+            command_capacity += figure.scatter(series_index).point_count()
+    if figure.legend_position() != LegendPosition.NONE:
+        command_capacity += 1 + 2 * figure._series_count()
+    var commands: List[DrawCommand]
+    if command_capacity >= 64:
+        commands = List[DrawCommand](capacity=command_capacity)
+    else:
+        commands = List[DrawCommand]()
     commands.append(_shape_command(CommandKind.BACKGROUND, 0.0, 0.0, width, height))
     commands.append(
         _shape_command(
@@ -679,7 +730,8 @@ def build_render_plan(
             bottom,
         )
     )
-    for tick in y_ticks:
+    for tick_index in range(len(y_ticks)):
+        var tick = y_ticks[tick_index]
         var y = y_mapper.map(tick)
         commands.append(
             _shape_command(
@@ -690,12 +742,15 @@ def build_render_plan(
                 y,
             )
         )
+        var tick_text = _tick_label(tick, y_step)
+        if figure.has_explicit_y_ticks():
+            tick_text = explicit_y_tick_labels[tick_index].copy()
         commands.append(
             _text_command(
                 CommandKind.Y_LABEL,
                 area.x() - 6.0,
                 y + 3.0,
-                _tick_label(tick, y_step),
+                tick_text^,
             )
         )
 

@@ -4,7 +4,7 @@ from std.math import isfinite
 
 
 struct LineStyle(Copyable, Equatable, ImplicitlyCopyable):
-    """A non-raising nominal line pattern with deterministic SVG dash geometry."""
+    """A nominal line pattern with non-raising constants and equality."""
 
     var _value: Int
 
@@ -21,9 +21,14 @@ struct LineStyle(Copyable, Equatable, ImplicitlyCopyable):
         """Return whether two line styles have the same discriminant."""
         return self._value == other._value
 
+    def validate(self) raises:
+        """Reject discriminants outside Sen's fixed line-style vocabulary."""
+        if self._value < 0 or self._value > 3:
+            raise Error("line style is outside Sen's vocabulary")
+
 
 struct MarkerStyle(Copyable, Equatable, ImplicitlyCopyable):
-    """A non-raising nominal marker with deterministic fixed SVG geometry."""
+    """A nominal marker with non-raising constants and equality."""
 
     var _value: Int
 
@@ -43,6 +48,11 @@ struct MarkerStyle(Copyable, Equatable, ImplicitlyCopyable):
     def __eq__(self, other: Self) -> Bool:
         """Return whether two marker styles have the same discriminant."""
         return self._value == other._value
+
+    def validate(self) raises:
+        """Reject discriminants outside Sen's fixed marker vocabulary."""
+        if self._value < 0 or self._value > 7:
+            raise Error("marker style is outside Sen's vocabulary")
 
 
 def _parse_hex_color(color: StringSlice) raises -> String:
@@ -158,11 +168,12 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         return result^
 
     def validate(self) raises:
-        """Validate the stored palette slot, line width, and custom color.
+        """Validate every stored style field in deterministic order.
 
         Raises when the slot is outside ``-1..5`` or the width is non-finite or
-        not strictly positive, or when a nonempty custom color is not strict hex.
-        Checks run in stable palette-then-width-then-color order.
+        not strictly positive, when a nonempty custom color is not strict hex,
+        or when either nominal style is outside Sen's fixed vocabulary. Checks
+        run in stable palette-width-color-line-marker order.
         """
         if self._palette_slot < -1 or self._palette_slot > 5:
             raise Error(
@@ -177,6 +188,8 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
             )
         if self._custom_color.byte_length() > 0:
             _ = _parse_hex_color(self._custom_color)
+        self._line_style.validate()
+        self._marker_style.validate()
 
     def palette_slot(self) -> Int:
         """Return deterministic ``-1`` or an explicit slot without raising."""
