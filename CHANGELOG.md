@@ -5,6 +5,27 @@ and uses semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Consuming `Plot.with_*` methods for fluent, ownership-preserving construction
+  across every existing plot overload and configuration call, while retaining
+  all mutable mutators.
+- `Plot.figure()`, `into_figure()`, `validate()`, and direct
+  `build_render_plan()` bridges, plus explicit-margin `Plot.save_svg()`.
+- Symmetric explicit x/y ticks, automatic-limit restoration, and matching
+  mutable and fluent `Plot` controls.
+- Public `encode_svg(plan)` and `write_svg(path, svg)` prepared-output APIs;
+  `save_svg(path, svg)` remains a compatibility alias.
+- Symmetric in-memory and explicit-margin render/save methods on `Figure`.
+
+### Changed
+
+- Validate public nominal discriminators at explicit checkpoints and reject
+  configuration fallthrough at render time without rescanning point data.
+- Report complete advanced-series index ranges and empty-figure guidance.
+- Count empty area and rectangle series in figure bounds diagnostics, and let
+  ownership-taking area/rectangle insertion retain legend labels.
+
 ## [0.1.0] - 2026-08-22
 
 ### Added

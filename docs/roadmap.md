@@ -89,7 +89,11 @@ neither project changes its core semantic model merely to fit the other.
 - [x] Add segmented filled areas through a backend-neutral render-plan command,
   including baseline autoscaling, missing-data topology, SVG golden output, and
   the simple `Plot.area` front door.
-- Add ergonomic builders only for repeated friction demonstrated by examples.
+- [x] Add consuming, chainable `Plot.with_*` construction for every existing
+  plot and configuration call while retaining the mutable API and byte-exact
+  output.
+- [x] Make x/y ticks, automatic-limit restoration, Figure/Plot rendering, and
+  prepared-plan SVG encoding symmetric and explicit.
 - Submit a modular-community recipe when SVG plotting is useful by itself.
 
 ## v0.3 — Performance

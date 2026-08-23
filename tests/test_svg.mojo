@@ -9,7 +9,10 @@ from sen import (
     MissingPolicy,
     PlotPoint,
     SeriesStyle,
+    build_render_plan,
+    encode_svg,
     render_svg,
+    write_svg,
 )
 from sen.svg import (
     _append_svg_number,
@@ -25,6 +28,37 @@ from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 def fixture_margins() raises -> Margins:
     return Margins(24.0, 8.0, 8.0, 20.0)
+
+
+def test_public_encode_svg_reuses_and_validates_a_prepared_plan() raises:
+    var figure = single_line_figure()
+    var margins = fixture_margins()
+    var plan = build_render_plan(figure, 160.0, 100.0, margins)
+    assert_equal(encode_svg(plan), render_svg(figure, 160.0, 100.0, margins))
+
+    plan.width = Float64("nan")
+    with assert_raises(contains="render-plan figure size must be finite and positive"):
+        _ = encode_svg(plan)
+
+
+def test_write_svg_names_the_existing_bytes_workflow() raises:
+    var path = String(".pixi/write-svg-test.svg")
+    var contents = String("<svg>prepared</svg>\n")
+    write_svg(path, contents)
+    with open(path, "r") as saved:
+        assert_equal(saved.read(), contents)
+
+
+def test_figure_render_and_save_methods_accept_explicit_margins() raises:
+    var figure = single_line_figure()
+    var margins = fixture_margins()
+    var expected = render_svg(figure, 160.0, 100.0, margins)
+    assert_equal(figure.render_svg(160.0, 100.0, margins), expected)
+
+    var path = String(".pixi/figure-explicit-margins-test.svg")
+    figure.save_svg(path, 160.0, 100.0, margins)
+    with open(path, "r") as saved:
+        assert_equal(saved.read(), expected)
 
 
 def single_line_figure() raises -> Figure:
@@ -401,7 +435,8 @@ def test_render_rejects_figures_without_points() raises:
     var empty = Figure()
     with assert_raises(
         contains=(
-            "figure has no series; add data with line() or scatter() before rendering"
+            "figure has no series; add a line, scatter, area, bar, or histogram "
+            "before rendering"
         )
     ):
         _ = render_svg(empty, 120.0, 80.0)

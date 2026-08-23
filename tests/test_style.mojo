@@ -107,5 +107,31 @@ def test_custom_color_construction_and_builder_precede_palette_slots() raises:
         corrupted.validate()
 
 
+def test_style_nominals_validate_both_discriminant_boundaries() raises:
+    LineStyle.SOLID.validate()
+    LineStyle.DASH_DOT.validate()
+    MarkerStyle.NONE.validate()
+    MarkerStyle.STAR.validate()
+
+    with assert_raises(contains="line style is outside Sen's vocabulary"):
+        LineStyle(_value=-1).validate()
+    with assert_raises(contains="line style is outside Sen's vocabulary"):
+        LineStyle(_value=4).validate()
+    with assert_raises(contains="marker style is outside Sen's vocabulary"):
+        MarkerStyle(_value=-1).validate()
+    with assert_raises(contains="marker style is outside Sen's vocabulary"):
+        MarkerStyle(_value=8).validate()
+
+
+def test_series_style_validation_covers_embedded_nominals() raises:
+    var invalid_line = SeriesStyle().with_line_style(LineStyle(_value=4))
+    with assert_raises(contains="line style is outside Sen's vocabulary"):
+        invalid_line.validate()
+
+    var invalid_marker = SeriesStyle().with_marker_style(MarkerStyle(_value=-1))
+    with assert_raises(contains="marker style is outside Sen's vocabulary"):
+        invalid_marker.validate()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

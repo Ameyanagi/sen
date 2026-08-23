@@ -1,12 +1,15 @@
 from sen import (
+    AxisKind,
     CommandKind,
     DrawCommand,
     Figure,
+    LegendPosition,
     LineStyle,
     Margins,
     MarkerStyle,
     PlanPoint,
     RenderPlan,
+    SeriesStyle,
     build_render_plan,
 )
 from std.collections import List
@@ -342,6 +345,74 @@ def test_explicit_validation_detects_post_construction_mutation() raises:
     style_plan.commands[0].line_style = LineStyle(_value=99)
     with assert_raises(contains="line style is outside Sen's vocabulary"):
         style_plan.validate()
+
+
+def test_lowering_rejects_invalid_nominals_without_rescanning_points() raises:
+    var invalid_axis = _figure()
+    invalid_axis._x_scale = AxisKind(_value=2)
+    with assert_raises(contains="axis kind is outside Sen's vocabulary"):
+        _ = build_render_plan(invalid_axis, 160.0, 100.0, _margins())
+
+    var invalid_legend = _figure()
+    invalid_legend._legend_position = LegendPosition(_value=-1)
+    with assert_raises(contains="legend position is outside Sen's vocabulary"):
+        _ = build_render_plan(invalid_legend, 160.0, 100.0, _margins())
+
+    var invalid_style = _figure()
+    invalid_style._line_styles[0] = SeriesStyle().with_marker_style(
+        MarkerStyle(_value=8)
+    )
+    with assert_raises(contains="marker style is outside Sen's vocabulary"):
+        _ = build_render_plan(invalid_style, 160.0, 100.0, _margins())
+
+
+def test_explicit_y_ticks_filter_labels_and_align_horizontal_grid() raises:
+    var x: List[Float64] = [0.0, 1.0]
+    var y: List[Float64] = [0.0, 10.0]
+    var ticks: List[Float64] = [-1.0, 2.0, 8.0, 11.0]
+    var labels: List[String] = ["below", "two", "eight", "above"]
+    var figure = Figure()
+    figure.line(x, y)
+    figure.set_y_limits(0.0, 10.0)
+    figure.set_y_ticks(ticks, labels)
+    figure.set_grid(True)
+
+    var plan = build_render_plan(figure, 160.0, 100.0, _margins())
+    var y_label_count = 0
+    var horizontal_grid_count = 0
+    for command_index in range(plan.command_count()):
+        ref command = plan.command(command_index)
+        if command.kind == CommandKind.Y_LABEL:
+            assert_true(command.text == "two" or command.text == "eight")
+            y_label_count += 1
+            var aligned = False
+            for grid_index in range(plan.command_count()):
+                ref grid = plan.command(grid_index)
+                if (
+                    grid.kind == CommandKind.GRID
+                    and grid.y1 == grid.y2
+                    and grid.y1 == command.y1 - 3.0
+                ):
+                    aligned = True
+            assert_true(aligned)
+        if command.kind == CommandKind.GRID and command.y1 == command.y2:
+            horizontal_grid_count += 1
+    assert_equal(y_label_count, 2)
+    assert_equal(horizontal_grid_count, 2)
+
+
+def test_log_y_axis_rejects_nonpositive_explicit_ticks() raises:
+    var x: List[Float64] = [1.0, 10.0]
+    var y: List[Float64] = [1.0, 10.0]
+    var ticks: List[Float64] = [0.0, 1.0]
+    var labels: List[String] = ["zero", "one"]
+    var figure = Figure()
+    figure.line(x, y)
+    figure.set_y_ticks(ticks, labels)
+    figure.set_y_scale(AxisKind.LOG10)
+
+    with assert_raises(contains="log-scale y tick positions must be positive; tick 0"):
+        _ = build_render_plan(figure, 160.0, 100.0, _margins())
 
 
 def main() raises:

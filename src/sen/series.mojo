@@ -4,6 +4,7 @@ from std.collections import List, Optional
 from std.math import isfinite
 from std.sys import simd_width_of
 
+from .layout import Margins
 from .style import SeriesStyle
 
 
@@ -38,6 +39,11 @@ struct MissingPolicy(Copyable, Equatable, ImplicitlyCopyable):
         """Return deterministic discriminant equality without raising."""
         return self._value == other._value
 
+    def validate(self) raises:
+        """Reject discriminants outside Sen's missing-data vocabulary."""
+        if self._value < 0 or self._value > 2:
+            raise Error("missing policy is outside Sen's vocabulary")
+
 
 struct StepMode(Copyable, Equatable, ImplicitlyCopyable):
     """Choose where a step line changes between adjacent observations."""
@@ -55,6 +61,11 @@ struct StepMode(Copyable, Equatable, ImplicitlyCopyable):
     def __eq__(self, other: Self) -> Bool:
         """Return whether both values select the same step placement."""
         return self._value == other._value
+
+    def validate(self) raises:
+        """Reject discriminants outside Sen's step-placement vocabulary."""
+        if self._value < 0 or self._value > 2:
+            raise Error("step mode is outside Sen's vocabulary")
 
 
 struct PlotPoint(Copyable, ImplicitlyCopyable):
@@ -333,6 +344,7 @@ struct LineSeries(Copyable):
         y: Span[Float64, ImmutAnyOrigin],
         missing: MissingPolicy,
     ) raises -> Self:
+        missing.validate()
         if len(x) != len(y):
             raise Error(
                 "x and y coordinate sequences must have equal length; got len(x) = ",
@@ -400,6 +412,7 @@ struct LineSeries(Copyable):
         mode: StepMode,
     ) raises -> Self:
         """Lower finite observations into one allocation-sized step line."""
+        mode.validate()
         if len(x) != len(y):
             raise Error(
                 "step x length ",
@@ -896,6 +909,7 @@ struct ScatterSeries(Copyable):
         y: Span[Float64, ImmutAnyOrigin],
         missing: MissingPolicy,
     ) raises -> Self:
+        missing.validate()
         if len(x) != len(y):
             raise Error(
                 "x and y coordinate sequences must have equal length; got len(x) = ",
@@ -1600,6 +1614,11 @@ struct AxisKind(Copyable, Equatable, ImplicitlyCopyable):
         """Return whether both values select the same axis transform."""
         return self._value == other._value
 
+    def validate(self) raises:
+        """Reject discriminants outside Sen's axis-kind vocabulary."""
+        if self._value < 0 or self._value > 1:
+            raise Error("axis kind is outside Sen's vocabulary")
+
 
 struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
     """A deterministic nominal legend position; ``NONE`` suppresses rendering.
@@ -1624,15 +1643,21 @@ struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
         """Return deterministic discriminant equality without raising."""
         return self._value == other._value
 
+    def validate(self) raises:
+        """Reject discriminants outside Sen's legend-position vocabulary."""
+        if self._value < 0 or self._value > 4:
+            raise Error("legend position is outside Sen's vocabulary")
+
 
 struct Figure(Copyable):
     """A renderer-neutral collection preserving interleaved series draw order.
 
-    Lower-level ``add_line``, ``add_scatter``, and ``add_rectangles`` calls take
-    ownership without copying and store empty labels. One-call ingestion builds
-    and validates line, marker, segmented basic-plot, or filled-rectangle
-    semantics before insertion. Constructed series are trusted on insertion and
-    public operations trust them thereafter. Direct mutation of
+    Lower-level ``add_line``, ``add_scatter``, ``add_area``, and
+    ``add_rectangles`` calls take ownership without copying and accept optional
+    labels. One-call ingestion builds and validates line, marker, segmented
+    basic-plot, or filled-rectangle semantics before insertion. Constructed
+    series are trusted on insertion and public operations trust them thereafter.
+    Direct mutation of
     underscore-prefixed storage is out of contract; call ``validate`` explicitly
     when a checkpoint is needed. All stored ordering, palette, legend, axis, and
     grid state is consumed deterministically by renderers; fallible ingestion,
@@ -1669,6 +1694,9 @@ struct Figure(Copyable):
     var _has_x_ticks: Bool
     var _x_tick_positions: List[Float64]
     var _x_tick_labels: List[String]
+    var _has_y_ticks: Bool
+    var _y_tick_positions: List[Float64]
+    var _y_tick_labels: List[String]
 
     def __init__(out self):
         """Construct deterministic empty linear-axis defaults without raising."""
@@ -1701,6 +1729,9 @@ struct Figure(Copyable):
         self._has_x_ticks = False
         self._x_tick_positions = List[Float64]()
         self._x_tick_labels = List[String]()
+        self._has_y_ticks = False
+        self._y_tick_positions = List[Float64]()
+        self._y_tick_labels = List[String]()
 
     def _insert_line(
         mut self, var line: LineSeries, var label: String, style: SeriesStyle
@@ -1775,17 +1806,25 @@ struct Figure(Copyable):
         """
         self._insert_scatter(scatter^, label^, style)
 
-    def add_area(mut self, var area: AreaSeries, style: SeriesStyle = SeriesStyle()):
-        """Take ownership of a renderer-neutral filled area without copying."""
-        self._insert_area(area^, String(), style)
+    def add_area(
+        mut self,
+        var area: AreaSeries,
+        style: SeriesStyle = SeriesStyle(),
+        *,
+        var label: String = String(),
+    ):
+        """Take ownership and store ``label`` in insertion order."""
+        self._insert_area(area^, label^, style)
 
     def add_rectangles(
         mut self,
         var rectangles: RectangleSeries,
         style: SeriesStyle = SeriesStyle(),
+        *,
+        var label: String = String(),
     ):
-        """Take ownership of a reusable filled-rectangle series without copying."""
-        self._insert_rectangles(rectangles^, String(), style)
+        """Take ownership and store ``label`` in insertion order."""
+        self._insert_rectangles(rectangles^, label^, style)
 
     def line(
         mut self,
@@ -1944,7 +1983,7 @@ struct Figure(Copyable):
                     len(categories),
                     " does not match the existing x tick domain length ",
                     self.x_tick_count(),
-                    "; reuse the same categories or start a new Figure",
+                    "; reuse the same categories or start a new plot",
                 )
             for index in range(len(categories)):
                 if (
@@ -1957,7 +1996,7 @@ struct Figure(Copyable):
                             " index "
                         ),
                         index,
-                        "; reuse the same ordered categories or start a new Figure",
+                        "; reuse the same ordered categories or start a new plot",
                     )
         else:
             var positions = List[Float64](capacity=len(categories))
@@ -2044,6 +2083,18 @@ struct Figure(Copyable):
         self._y_limit_lo = lo
         self._y_limit_hi = hi
 
+    def clear_x_limits(mut self):
+        """Restore automatic x-domain selection deterministically."""
+        self._has_x_limits = False
+        self._x_limit_lo = 0.0
+        self._x_limit_hi = 1.0
+
+    def clear_y_limits(mut self):
+        """Restore automatic y-domain selection deterministically."""
+        self._has_y_limits = False
+        self._y_limit_lo = 0.0
+        self._y_limit_hi = 1.0
+
     def set_x_ticks(
         mut self,
         positions: Span[Float64, ...],
@@ -2080,6 +2131,43 @@ struct Figure(Copyable):
         self._has_x_ticks = False
         self._x_tick_positions = List[Float64]()
         self._x_tick_labels = List[String]()
+
+    def set_y_ticks(
+        mut self,
+        positions: Span[Float64, ...],
+        labels: Span[String, _],
+    ) raises:
+        """Replace y ticks atomically with owned positions and labels."""
+        if len(positions) != len(labels):
+            raise Error(
+                "y tick position length ",
+                len(positions),
+                " must equal label length ",
+                len(labels),
+                "; pass one label per position",
+            )
+        var stored_positions = List[Float64](capacity=len(positions))
+        var stored_labels = List[String](capacity=len(labels))
+        for index in range(len(positions)):
+            if not isfinite(positions[index]):
+                raise Error(
+                    "y tick position at index ",
+                    index,
+                    " must be finite; got ",
+                    positions[index],
+                    "; replace the invalid position",
+                )
+            stored_positions.append(positions[index])
+            stored_labels.append(labels[index].copy())
+        self._has_y_ticks = True
+        self._y_tick_positions = stored_positions^
+        self._y_tick_labels = stored_labels^
+
+    def clear_y_ticks(mut self):
+        """Restore automatic y tick positions and numeric labels."""
+        self._has_y_ticks = False
+        self._y_tick_positions = List[Float64]()
+        self._y_tick_labels = List[String]()
 
     def title(self) -> ref[self._title] String:
         """Return the exact stored title by read reference without raising."""
@@ -2153,8 +2241,57 @@ struct Figure(Copyable):
             )
         return self._x_tick_labels[index]
 
+    def has_explicit_y_ticks(self) -> Bool:
+        """Return whether rendering uses caller-supplied y ticks."""
+        return self._has_y_ticks
+
+    def y_tick_count(self) -> Int:
+        """Return the explicit y tick count, or zero for automatic ticks."""
+        if not self._has_y_ticks:
+            return 0
+        return len(self._y_tick_positions)
+
+    def y_tick_position(self, index: Int) raises -> Float64:
+        """Return an explicit y tick position by checked index."""
+        if not self._has_y_ticks or index < 0 or index >= len(self._y_tick_positions):
+            raise Error(
+                "y tick index must be within [0, ",
+                len(self._y_tick_positions),
+                "); got ",
+                index,
+            )
+        return self._y_tick_positions[index]
+
+    def y_tick_label(self, index: Int) raises -> ref[self._y_tick_labels[index]] String:
+        """Return an explicit y tick label by checked index."""
+        if not self._has_y_ticks or index < 0 or index >= len(self._y_tick_labels):
+            raise Error(
+                "y tick index must be within [0, ",
+                len(self._y_tick_labels),
+                "); got ",
+                index,
+            )
+        return self._y_tick_labels[index]
+
+    def _validate_render_configuration(self) raises:
+        """Reject nominal fallthroughs without rescanning retained point data."""
+        self._x_scale.validate()
+        self._y_scale.validate()
+        self._legend_position.validate()
+        for style in self._line_styles:
+            style.validate()
+        for style in self._scatter_styles:
+            style.validate()
+        for style in self._area_styles:
+            style.validate()
+        for style in self._rectangle_styles:
+            style.validate()
+
     def validate(self) raises:
         """Validate all stored invariants in deterministic field and index order."""
+        self._x_scale.validate()
+        self._y_scale.validate()
+        self._legend_position.validate()
         if self._has_x_limits:
             if not isfinite(self._x_limit_lo) or not isfinite(self._x_limit_hi):
                 raise Error(
@@ -2289,6 +2426,32 @@ struct Figure(Copyable):
                 len(self._x_tick_positions),
                 " positions and ",
                 len(self._x_tick_labels),
+                " labels; clear explicit tick storage",
+            )
+        if self._has_y_ticks:
+            if len(self._y_tick_positions) != len(self._y_tick_labels):
+                raise Error(
+                    "figure y tick positions must match y tick labels; got ",
+                    len(self._y_tick_positions),
+                    " positions for ",
+                    len(self._y_tick_labels),
+                    " labels",
+                )
+            for index in range(len(self._y_tick_positions)):
+                if not isfinite(self._y_tick_positions[index]):
+                    raise Error(
+                        "y tick position at index ",
+                        index,
+                        " must be finite; got ",
+                        self._y_tick_positions[index],
+                        "; replace the invalid position",
+                    )
+        elif len(self._y_tick_positions) != 0 or len(self._y_tick_labels) != 0:
+            raise Error(
+                "automatic y ticks must not retain explicit tick storage; got ",
+                len(self._y_tick_positions),
+                " positions and ",
+                len(self._y_tick_labels),
                 " labels; clear explicit tick storage",
             )
         if len(self._order) != (
@@ -2450,11 +2613,16 @@ struct Figure(Copyable):
             else:
                 combined = current
         if not combined:
-            var series_count = len(self._lines) + len(self._scatters)
+            var series_count = (
+                len(self._lines)
+                + len(self._scatters)
+                + len(self._areas)
+                + len(self._rectangles)
+            )
             if series_count == 0:
                 raise Error(
-                    "figure has no series; add data with line() or scatter() "
-                    "before rendering"
+                    "figure has no series; add a line, scatter, area, bar, or "
+                    "histogram before rendering"
                 )
             raise Error(
                 "figure has ",
@@ -2488,7 +2656,12 @@ struct Figure(Copyable):
     def area(self, index: Int) raises -> ref[self._areas[index]] AreaSeries:
         """Return a stable area reference by checked storage index."""
         if index < 0 or index >= len(self._areas):
-            raise Error("figure area index is out of bounds")
+            raise Error(
+                "figure area index must be within [0, ",
+                len(self._areas),
+                "); got ",
+                index,
+            )
         return self._areas[index]
 
     def rectangles(
@@ -2496,7 +2669,12 @@ struct Figure(Copyable):
     ) raises -> ref[self._rectangles[index]] RectangleSeries:
         """Return a stable rectangle-series reference by checked index."""
         if index < 0 or index >= len(self._rectangles):
-            raise Error("figure rectangle index is out of bounds")
+            raise Error(
+                "figure rectangle index must be within [0, ",
+                len(self._rectangles),
+                "); got ",
+                index,
+            )
         return self._rectangles[index]
 
     def line_label(self, index: Int) raises -> ref[self._line_labels[index]] String:
@@ -2526,7 +2704,12 @@ struct Figure(Copyable):
     def area_label(self, index: Int) raises -> ref[self._area_labels[index]] String:
         """Return the exact area label by checked storage index."""
         if index < 0 or index >= len(self._area_labels):
-            raise Error("figure area-label index is out of bounds")
+            raise Error(
+                "figure area-label index must be within [0, ",
+                len(self._area_labels),
+                "); got ",
+                index,
+            )
         return self._area_labels[index]
 
     def rectangle_label(
@@ -2534,7 +2717,12 @@ struct Figure(Copyable):
     ) raises -> ref[self._rectangle_labels[index]] String:
         """Return the exact rectangle-series label by checked index."""
         if index < 0 or index >= len(self._rectangle_labels):
-            raise Error("figure rectangle-label index is out of bounds")
+            raise Error(
+                "figure rectangle-label index must be within [0, ",
+                len(self._rectangle_labels),
+                "); got ",
+                index,
+            )
         return self._rectangle_labels[index]
 
     def _series_count(self) -> Int:
@@ -2572,6 +2760,40 @@ struct Figure(Copyable):
             return self._area_labels[entry.index].copy()
         return self._rectangle_labels[entry.index].copy()
 
+    def render_svg(
+        self,
+        width: Float64,
+        height: Float64,
+        margins: Margins,
+    ) raises -> String:
+        """Render this figure in memory with explicit canvas geometry."""
+        from .svg import render_svg
+
+        return render_svg(self, width, height, margins)
+
+    def render_svg(
+        self,
+        width: Float64 = 640.0,
+        height: Float64 = 480.0,
+    ) raises -> String:
+        """Render this figure in memory using Sen's default margins."""
+        from .svg import render_svg
+
+        return render_svg(self, width, height)
+
+    def save_svg(
+        self,
+        path: StringSlice,
+        width: Float64,
+        height: Float64,
+        margins: Margins,
+    ) raises:
+        """Render with explicit geometry and replace ``path`` with its SVG."""
+        from .svg import render_svg, write_svg
+
+        var svg = render_svg(self, width, height, margins)
+        write_svg(path, svg)
+
     def save_svg(
         self,
         path: StringSlice,
@@ -2583,7 +2805,7 @@ struct Figure(Copyable):
         Missing parent directories are created. Rendering and I/O errors
         propagate to the caller.
         """
-        from .svg import render_svg, save_svg
+        from .svg import render_svg, write_svg
 
         var svg = render_svg(self, width, height)
-        save_svg(path, svg)
+        write_svg(path, svg)
