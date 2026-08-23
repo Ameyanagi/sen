@@ -7,7 +7,9 @@ from .layout import Margins
 from .lowering import build_render_plan
 from .render_plan import CommandKind, DrawCommand, RenderPlan
 from .series import Figure
-from .style import LineStyle, MarkerStyle, _palette_color
+from .style import LineCap, LineJoin, LineStyle, MarkerStyle, _palette_color
+from .text import TextKind
+from .typst import TypstOptions, _compile_typst_svg
 
 
 def _decimal_factor(precision: Int) raises -> Int:
@@ -131,22 +133,38 @@ def _tick_label(value: Float64, step: Float64) raises -> String:
     return _format_decimal(value, decimals)
 
 
-def _escape_xml(text: StringSlice) -> String:
-    """Escape all five XML predefined entities while preserving Unicode."""
+def _escape_xml(text: StringSlice) raises -> String:
+    """Escape XML entities and reject scalars forbidden by XML 1.0."""
     var escaped = String()
-    for codepoint in text.codepoint_slices():
-        if codepoint == "&":
+    for grapheme in text.codepoint_slices():
+        var codepoint = 0
+        for scalar in grapheme.codepoints():
+            codepoint = Int(scalar.to_u32())
+        var permitted = (
+            codepoint == 0x09
+            or codepoint == 0x0A
+            or codepoint == 0x0D
+            or (codepoint >= 0x20 and codepoint <= 0xD7FF)
+            or (codepoint >= 0xE000 and codepoint <= 0xFFFD)
+            or (codepoint >= 0x10000 and codepoint <= 0x10FFFF)
+        )
+        if not permitted:
+            raise Error(
+                "SVG text contains a scalar forbidden by XML 1.0; got U+",
+                codepoint,
+            )
+        if grapheme == "&":
             escaped += "&amp;"
-        elif codepoint == "<":
+        elif grapheme == "<":
             escaped += "&lt;"
-        elif codepoint == ">":
+        elif grapheme == ">":
             escaped += "&gt;"
-        elif codepoint == '"':
+        elif grapheme == '"':
             escaped += "&quot;"
-        elif codepoint == "'":
+        elif grapheme == "'":
             escaped += "&apos;"
         else:
-            escaped += codepoint
+            escaped += grapheme
     return escaped^
 
 
@@ -190,6 +208,7 @@ def _append_rect(
     command: DrawCommand,
     fill: StringSlice,
     stroke: StringSlice,
+    opacity: Float64 = 1.0,
 ) raises:
     if command.kind._value == CommandKind.RECTANGLE._value:
         svg += '    <rect class="'
@@ -211,10 +230,14 @@ def _append_rect(
         svg += ' stroke="'
         svg += stroke
         svg += '" stroke-width="1"'
+    if opacity != 1.0:
+        svg += ' opacity="'
+        _append_svg_number(svg, opacity)
+        svg += '"'
     svg += "/>\n"
 
 
-def _append_line(mut svg: String, command: DrawCommand) raises:
+def _append_line(mut svg: String, command: DrawCommand, color: StringSlice) raises:
     svg += '  <line class="'
     svg += _semantic_class(command)
     svg += '" x1="'
@@ -225,10 +248,38 @@ def _append_line(mut svg: String, command: DrawCommand) raises:
     _append_svg_number(svg, command.x2)
     svg += '" y2="'
     _append_svg_number(svg, command.y2)
-    if command.kind._value == CommandKind.GRID._value:
-        svg += '" stroke="#e0e0e0" stroke-width="1"/>\n'
+    svg += '" stroke="'
+    svg += color
+    svg += '" stroke-width="1"/>\n'
+
+
+def _append_line_cap(mut svg: String, cap: LineCap):
+    svg += ' stroke-linecap="'
+    if cap == LineCap.BUTT:
+        svg += "butt"
+    elif cap == LineCap.SQUARE:
+        svg += "square"
     else:
-        svg += '" stroke="#222222" stroke-width="1"/>\n'
+        svg += "round"
+    svg += '"'
+
+
+def _append_line_join(mut svg: String, join: LineJoin):
+    svg += ' stroke-linejoin="'
+    if join == LineJoin.MITER:
+        svg += "miter"
+    elif join == LineJoin.BEVEL:
+        svg += "bevel"
+    else:
+        svg += "round"
+    svg += '"'
+
+
+def _append_opacity(mut svg: String, opacity: Float64) raises:
+    if opacity != 1.0:
+        svg += ' opacity="'
+        _append_svg_number(svg, opacity)
+        svg += '"'
 
 
 def _append_styled_line(mut svg: String, command: DrawCommand) raises:
@@ -253,10 +304,18 @@ def _append_styled_line(mut svg: String, command: DrawCommand) raises:
         svg += ' stroke-dasharray="1.5 2.5"'
     elif command.line_style == LineStyle.DASH_DOT:
         svg += ' stroke-dasharray="6 3 1.5 3"'
+    _append_line_cap(svg, command.line_cap)
+    _append_line_join(svg, command.line_join)
+    _append_opacity(svg, command.opacity)
     svg += "/>\n"
 
 
-def _append_text(mut svg: String, command: DrawCommand) raises:
+def _append_text(
+    mut svg: String,
+    command: DrawCommand,
+    family: StringSlice,
+    foreground: StringSlice,
+) raises:
     svg += '  <text class="'
     svg += _semantic_class(command)
     svg += '" x="'
@@ -270,17 +329,20 @@ def _append_text(mut svg: String, command: DrawCommand) raises:
         svg += " "
         _append_svg_number(svg, command.y1)
         svg += ')"'
-    svg += ' fill="#222222" font-family="sans-serif" font-size="'
+    svg += ' fill="'
+    svg += foreground
+    svg += '" font-family="'
+    svg += _escape_xml(family)
+    svg += '" font-size="'
+    _append_svg_number(svg, command.font_size)
+    svg += '"'
     if command.kind._value == CommandKind.TITLE._value:
-        svg += "12"
+        svg += ' font-weight="600"'
     elif (
         command.kind._value == CommandKind.X_TITLE._value
         or command.kind._value == CommandKind.Y_TITLE._value
     ):
-        svg += "10"
-    else:
-        svg += "8"
-    svg += '"'
+        svg += ' font-weight="500"'
     if (
         command.kind._value == CommandKind.X_LABEL._value
         or command.kind._value == CommandKind.TITLE._value
@@ -295,6 +357,84 @@ def _append_text(mut svg: String, command: DrawCommand) raises:
     svg += ">"
     svg += _escape_xml(command.text)
     svg += "</text>\n"
+
+
+def _append_typst_text(
+    mut svg: String,
+    command: DrawCommand,
+    command_index: Int,
+    plan: RenderPlan,
+    foreground: StringSlice,
+    options: TypstOptions,
+) raises:
+    """Compile and nest one fixed-size Typst fragment at a text command."""
+    # Typst source is also exposed as accessibility metadata by callers and must
+    # remain valid XML even though the compiled geometry contains no source text.
+    _ = _escape_xml(command.text)
+    var box_width = plan.plot_width
+    if command.kind == CommandKind.Y_TITLE:
+        box_width = plan.plot_height
+    var box_height = command.font_size * 2.4
+    var points_per_logical = 72.0 / 100.0
+    var compiled = _compile_typst_svg(
+        command.text,
+        command.font_size * points_per_logical,
+        foreground,
+        box_width * points_per_logical,
+        box_height * points_per_logical,
+        options,
+    )
+    var id_prefix = options.id_prefix()
+    id_prefix += "-"
+    id_prefix += _semantic_class(command)
+    id_prefix += "-"
+    id_prefix.write(command_index)
+    id_prefix += "-"
+    var rewritten = _rewrite_typst_ids(compiled, id_prefix)
+    var nested = String(rewritten[byte=4:])
+    _append_placed_typst_svg(svg, command, plan, nested^)
+
+
+def _rewrite_typst_ids(compiled: StringSlice, id_prefix: StringSlice) -> String:
+    """Namespace Typst definitions and their local SVG references."""
+    var rewritten = String(compiled).replace('id="', 'id="' + id_prefix)
+    rewritten = rewritten.replace('href="#', 'href="#' + id_prefix)
+    rewritten = rewritten.replace("url(#", "url(#" + id_prefix)
+    return rewritten^
+
+
+def _append_placed_typst_svg(
+    mut svg: String,
+    command: DrawCommand,
+    plan: RenderPlan,
+    var nested: String,
+) raises:
+    """Place one already-compiled and namespaced Typst SVG document."""
+    var box_width = plan.plot_width
+    if command.kind == CommandKind.Y_TITLE:
+        box_width = plan.plot_height
+    var box_height = command.font_size * 2.4
+    var x = command.x1 - box_width / 2.0
+    var y = command.y1 - command.font_size * 0.3 - box_height / 2.0
+    if command.kind == CommandKind.Y_TITLE:
+        svg += '  <g transform="rotate(-90 '
+        _append_svg_number(svg, command.x1)
+        svg += " "
+        _append_svg_number(svg, command.y1)
+        svg += ')">\n'
+        svg += "  "
+    svg += '  <svg class="'
+    svg += _semantic_class(command)
+    svg += ' sen-typst" x="'
+    _append_svg_number(svg, x)
+    svg += '" y="'
+    _append_svg_number(svg, y)
+    svg += '"'
+    # Typst emits a single root SVG with deterministic dimensions and no XML
+    # declaration. Preserve its complete body while adding Sen placement.
+    svg += nested
+    if command.kind == CommandKind.Y_TITLE:
+        svg += "  </g>\n"
 
 
 def _append_polyline(mut svg: String, command: DrawCommand) raises:
@@ -318,6 +458,9 @@ def _append_polyline(mut svg: String, command: DrawCommand) raises:
         svg += ' stroke-dasharray="1.5 2.5"'
     elif command.line_style == LineStyle.DASH_DOT:
         svg += ' stroke-dasharray="6 3 1.5 3"'
+    _append_line_cap(svg, command.line_cap)
+    _append_line_join(svg, command.line_join)
+    _append_opacity(svg, command.opacity)
     svg += "/>\n"
 
 
@@ -333,7 +476,9 @@ def _append_area(mut svg: String, command: DrawCommand) raises:
         _append_svg_number(svg, command.points[index].y)
     svg += '" fill="'
     svg += command.color
-    svg += '" fill-opacity="0.35" stroke="'
+    svg += '" fill-opacity="'
+    _append_svg_number(svg, 0.35 * command.opacity)
+    svg += '" stroke="'
     svg += command.color
     svg += '" stroke-width="'
     _append_svg_number(svg, command.line_width)
@@ -344,6 +489,12 @@ def _append_area(mut svg: String, command: DrawCommand) raises:
         svg += ' stroke-dasharray="1.5 2.5"'
     elif command.line_style == LineStyle.DASH_DOT:
         svg += ' stroke-dasharray="6 3 1.5 3"'
+    if command.opacity != 1.0:
+        svg += ' stroke-opacity="'
+        _append_svg_number(svg, command.opacity)
+        svg += '"'
+    _append_line_cap(svg, command.line_cap)
+    _append_line_join(svg, command.line_join)
     svg += "/>\n"
 
 
@@ -361,7 +512,9 @@ def _append_area_legend(mut svg: String, command: DrawCommand) raises:
     _append_svg_number(svg, command.y2)
     svg += '" fill="'
     svg += command.color
-    svg += '" fill-opacity="0.35" stroke="'
+    svg += '" fill-opacity="'
+    _append_svg_number(svg, 0.35 * command.opacity)
+    svg += '" stroke="'
     svg += command.color
     svg += '" stroke-width="'
     _append_svg_number(svg, command.line_width)
@@ -372,6 +525,12 @@ def _append_area_legend(mut svg: String, command: DrawCommand) raises:
         svg += ' stroke-dasharray="1.5 2.5"'
     elif command.line_style == LineStyle.DASH_DOT:
         svg += ' stroke-dasharray="6 3 1.5 3"'
+    if command.opacity != 1.0:
+        svg += ' stroke-opacity="'
+        _append_svg_number(svg, command.opacity)
+        svg += '"'
+    _append_line_cap(svg, command.line_cap)
+    _append_line_join(svg, command.line_join)
     svg += "/>\n"
 
 
@@ -392,6 +551,8 @@ def _append_marker_line(
     x2: Float64,
     y2: Float64,
     color: StringSlice,
+    width: Float64,
+    opacity: Float64,
 ) raises:
     svg += indent
     svg += '<line class="'
@@ -407,12 +568,14 @@ def _append_marker_line(
     svg += '" stroke="'
     svg += color
     svg += '" stroke-width="'
-    _append_svg_number(svg, 1.5)
-    svg += '"/>\n'
+    _append_svg_number(svg, width)
+    svg += '"'
+    _append_opacity(svg, opacity)
+    svg += "/>\n"
 
 
 def _append_marker(mut svg: String, command: DrawCommand) raises:
-    """Encode fixed marker geometry; ``NONE`` falls back to a visible circle."""
+    """Encode configured marker geometry; ``NONE`` remains a visible circle."""
     var indent = String("    ")
     if command.kind._value == CommandKind.LEGEND_MARKER._value:
         indent = String("  ")
@@ -421,6 +584,7 @@ def _append_marker(mut svg: String, command: DrawCommand) raises:
         color = _palette_color(command.palette_slot)
     var css_class = _semantic_class(command)
     var marker = command.marker_style
+    var radius = command.marker_size / 2.0
     if marker == MarkerStyle.NONE or marker == MarkerStyle.CIRCLE:
         svg += indent
         svg += '<circle class="'
@@ -430,150 +594,239 @@ def _append_marker(mut svg: String, command: DrawCommand) raises:
         svg += '" cy="'
         _append_svg_number(svg, command.y1)
         svg += '" r="'
-        _append_svg_number(svg, 2.5)
+        _append_svg_number(svg, radius)
         svg += '" fill="'
         svg += color
-        svg += '"/>\n'
+        svg += '"'
+        _append_opacity(svg, command.opacity)
+        svg += "/>\n"
     elif marker == MarkerStyle.SQUARE:
         svg += indent
         svg += '<rect class="'
         svg += css_class
         svg += '" x="'
-        _append_svg_number(svg, command.x1 - 2.5)
+        _append_svg_number(svg, command.x1 - radius)
         svg += '" y="'
-        _append_svg_number(svg, command.y1 - 2.5)
+        _append_svg_number(svg, command.y1 - radius)
         svg += '" width="'
-        _append_svg_number(svg, 5.0)
+        _append_svg_number(svg, command.marker_size)
         svg += '" height="'
-        _append_svg_number(svg, 5.0)
+        _append_svg_number(svg, command.marker_size)
         svg += '" fill="'
         svg += color
-        svg += '"/>\n'
+        svg += '"'
+        _append_opacity(svg, command.opacity)
+        svg += "/>\n"
     elif marker == MarkerStyle.TRIANGLE:
         svg += indent
         svg += '<polygon class="'
         svg += css_class
         svg += '" points="'
-        _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.5)
+        _append_polygon_point(svg, command.x1, command.y1, 0.0, -radius)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 2.5, 2.5)
+        _append_polygon_point(svg, command.x1, command.y1, radius, radius)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -2.5, 2.5)
+        _append_polygon_point(svg, command.x1, command.y1, -radius, radius)
         svg += '" fill="'
         svg += color
-        svg += '"/>\n'
+        svg += '"'
+        _append_opacity(svg, command.opacity)
+        svg += "/>\n"
     elif marker == MarkerStyle.DIAMOND:
         svg += indent
         svg += '<polygon class="'
         svg += css_class
         svg += '" points="'
-        _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.5)
+        _append_polygon_point(svg, command.x1, command.y1, 0.0, -radius)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 2.5, 0.0)
+        _append_polygon_point(svg, command.x1, command.y1, radius, 0.0)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 0.0, 2.5)
+        _append_polygon_point(svg, command.x1, command.y1, 0.0, radius)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -2.5, 0.0)
+        _append_polygon_point(svg, command.x1, command.y1, -radius, 0.0)
         svg += '" fill="'
         svg += color
-        svg += '"/>\n'
+        svg += '"'
+        _append_opacity(svg, command.opacity)
+        svg += "/>\n"
     elif marker == MarkerStyle.PLUS:
         _append_marker_line(
             svg,
             indent,
             css_class,
-            command.x1 - 2.5,
+            command.x1 - radius,
             command.y1,
-            command.x1 + 2.5,
+            command.x1 + radius,
             command.y1,
             color,
+            max(1.0, command.marker_size * 0.24),
+            command.opacity,
         )
         _append_marker_line(
             svg,
             indent,
             css_class,
             command.x1,
-            command.y1 - 2.5,
+            command.y1 - radius,
             command.x1,
-            command.y1 + 2.5,
+            command.y1 + radius,
             color,
+            max(1.0, command.marker_size * 0.24),
+            command.opacity,
         )
     elif marker == MarkerStyle.CROSS:
         _append_marker_line(
             svg,
             indent,
             css_class,
-            command.x1 - 2.5,
-            command.y1 - 2.5,
-            command.x1 + 2.5,
-            command.y1 + 2.5,
+            command.x1 - radius,
+            command.y1 - radius,
+            command.x1 + radius,
+            command.y1 + radius,
             color,
+            max(1.0, command.marker_size * 0.24),
+            command.opacity,
         )
         _append_marker_line(
             svg,
             indent,
             css_class,
-            command.x1 - 2.5,
-            command.y1 + 2.5,
-            command.x1 + 2.5,
-            command.y1 - 2.5,
+            command.x1 - radius,
+            command.y1 + radius,
+            command.x1 + radius,
+            command.y1 - radius,
             color,
+            max(1.0, command.marker_size * 0.24),
+            command.opacity,
         )
     else:
         svg += indent
         svg += '<polygon class="'
         svg += css_class
         svg += '" points="'
-        # Five-point star offsets are exact Float64 literals: outer radius 2.9,
-        # inner radius 1.1, with the first vertex pointing upward.
-        _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.9)
+        # Scale the exact five-point-star unit geometry to the requested diameter.
+        var star_scale = radius / 2.9
+        _append_polygon_point(svg, command.x1, command.y1, 0.0, -2.9 * star_scale)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 0.6465637775, -0.8899186938)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            0.6465637775 * star_scale,
+            -0.8899186938 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 2.758063897, -0.8961492837)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            2.758063897 * star_scale,
+            -0.8961492837 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 1.046162168, 0.3399186938)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            1.046162168 * star_scale,
+            0.3399186938 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 1.704577232, 2.346149284)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            1.704577232 * star_scale,
+            2.346149284 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, 0.0, 1.1)
+        _append_polygon_point(svg, command.x1, command.y1, 0.0, 1.1 * star_scale)
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -1.704577232, 2.346149284)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            -1.704577232 * star_scale,
+            2.346149284 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -1.046162168, 0.3399186938)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            -1.046162168 * star_scale,
+            0.3399186938 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -2.758063897, -0.8961492837)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            -2.758063897 * star_scale,
+            -0.8961492837 * star_scale,
+        )
         svg += " "
-        _append_polygon_point(svg, command.x1, command.y1, -0.6465637775, -0.8899186938)
+        _append_polygon_point(
+            svg,
+            command.x1,
+            command.y1,
+            -0.6465637775 * star_scale,
+            -0.8899186938 * star_scale,
+        )
         svg += '" fill="'
         svg += color
-        svg += '"/>\n'
+        svg += '"'
+        _append_opacity(svg, command.opacity)
+        svg += "/>\n"
 
 
-def _encode_svg(plan: RenderPlan) raises -> String:
+def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
     """Encode commands with fixed per-element attribute ordering."""
-    var svg = String('<svg xmlns="http://www.w3.org/2000/svg" width="')
-    _append_svg_number(svg, plan.width)
+    var svg = String('<svg xmlns="http://www.w3.org/2000/svg" role="img"')
+    var language_tag = plan.theme.typography().locale().language_tag()
+    if language_tag.byte_length() > 0:
+        svg += ' lang="'
+        svg += _escape_xml(language_tag)
+        svg += '" xml:lang="'
+        svg += _escape_xml(language_tag)
+        svg += '"'
+    svg += ' width="'
+    if plan.figure_config:
+        _append_svg_number(svg, plan.figure_config.value().width())
+        svg += "in"
+    else:
+        _append_svg_number(svg, plan.width)
     svg += '" height="'
-    _append_svg_number(svg, plan.height)
+    if plan.figure_config:
+        _append_svg_number(svg, plan.figure_config.value().height())
+        svg += "in"
+    else:
+        _append_svg_number(svg, plan.height)
     svg += '" viewBox="0 0 '
     _append_svg_number(svg, plan.width)
     svg += " "
     _append_svg_number(svg, plan.height)
     svg += '">\n'
-    svg += "  <defs>\n"
-    svg += '    <clipPath id="sen-plot-area">\n'
-    svg += '      <rect x="'
-    _append_svg_number(svg, plan.plot_x)
-    svg += '" y="'
-    _append_svg_number(svg, plan.plot_y)
-    svg += '" width="'
-    _append_svg_number(svg, plan.plot_width)
-    svg += '" height="'
-    _append_svg_number(svg, plan.plot_height)
-    svg += '"/>\n'
-    svg += "    </clipPath>\n"
-    svg += "  </defs>\n"
+    var accessible_title = plan.accessible_title.copy()
+    if accessible_title.byte_length() == 0:
+        accessible_title = String("Scientific plot")
+        # Preserve the useful low-level RenderPlan behavior for callers that
+        # construct title commands directly without accessibility metadata.
+        for command in plan.commands:
+            if command.kind == CommandKind.TITLE:
+                accessible_title = command.text.copy()
+                break
+    svg += "  <title>"
+    svg += _escape_xml(accessible_title)
+    svg += "</title>\n"
+    svg += "  <desc>Scientific plot rendered by Sen.</desc>\n"
+    var background = plan.theme.background()
+    var foreground = plan.theme.foreground()
+    var grid = plan.theme.grid()
+    var frame = plan.theme.frame()
+    var legend_background = plan.theme.legend_background()
+    var typography = plan.theme.typography()
+    var family = typography.family()
     var series_group_open = False
     for index in range(len(plan.commands)):
         ref command = plan.commands[index]
@@ -584,21 +837,39 @@ def _encode_svg(plan: RenderPlan) raises -> String:
             or command.kind._value == CommandKind.RECTANGLE._value
         )
         if is_series and not series_group_open:
-            svg += '  <g clip-path="url(#sen-plot-area)">\n'
+            # A nested SVG establishes a clipping viewport without a document-global
+            # ID, so several inline Sen figures cannot collide with one another.
+            svg += '  <svg class="sen-plot-clip" x="'
+            _append_svg_number(svg, plan.plot_x)
+            svg += '" y="'
+            _append_svg_number(svg, plan.plot_y)
+            svg += '" width="'
+            _append_svg_number(svg, plan.plot_width)
+            svg += '" height="'
+            _append_svg_number(svg, plan.plot_height)
+            svg += '" viewBox="'
+            _append_svg_number(svg, plan.plot_x)
+            svg += " "
+            _append_svg_number(svg, plan.plot_y)
+            svg += " "
+            _append_svg_number(svg, plan.plot_width)
+            svg += " "
+            _append_svg_number(svg, plan.plot_height)
+            svg += '" overflow="hidden">\n'
             series_group_open = True
         elif not is_series and series_group_open:
-            svg += "  </g>\n"
+            svg += "  </svg>\n"
             series_group_open = False
         if command.kind._value == CommandKind.BACKGROUND._value:
-            _append_rect(svg, command, "#ffffff", "")
+            _append_rect(svg, command, background, "")
         elif command.kind._value == CommandKind.FRAME._value:
-            _append_rect(svg, command, "none", "#d0d0d0")
+            _append_rect(svg, command, "none", frame)
         elif command.kind._value == CommandKind.LEGEND_BACKGROUND._value:
-            _append_rect(svg, command, "#ffffff", "#d0d0d0")
+            _append_rect(svg, command, legend_background, frame)
         elif command.kind._value == CommandKind.RECTANGLE._value:
-            _append_rect(svg, command, command.color, "")
+            _append_rect(svg, command, command.color, "", command.opacity)
         elif command.kind._value == CommandKind.LEGEND_RECTANGLE._value:
-            _append_rect(svg, command, command.color, "")
+            _append_rect(svg, command, command.color, "", command.opacity)
         elif command.kind._value == CommandKind.LEGEND_AREA._value:
             _append_area_legend(svg, command)
         elif (
@@ -606,7 +877,10 @@ def _encode_svg(plan: RenderPlan) raises -> String:
             or command.kind._value == CommandKind.TICK._value
             or command.kind._value == CommandKind.GRID._value
         ):
-            _append_line(svg, command)
+            if command.kind._value == CommandKind.GRID._value:
+                _append_line(svg, command, grid)
+            else:
+                _append_line(svg, command, foreground)
         elif (
             command.kind._value == CommandKind.X_LABEL._value
             or command.kind._value == CommandKind.Y_LABEL._value
@@ -615,7 +889,10 @@ def _encode_svg(plan: RenderPlan) raises -> String:
             or command.kind._value == CommandKind.Y_TITLE._value
             or command.kind._value == CommandKind.LEGEND_TEXT._value
         ):
-            _append_text(svg, command)
+            if command.text_kind == TextKind.TYPST_MATH:
+                _append_typst_text(svg, command, index, plan, foreground, options)
+            else:
+                _append_text(svg, command, family, foreground)
         elif command.kind._value == CommandKind.SERIES._value:
             _append_polyline(svg, command)
         elif command.kind._value == CommandKind.AREA._value:
@@ -625,9 +902,14 @@ def _encode_svg(plan: RenderPlan) raises -> String:
         else:
             _append_marker(svg, command)
     if series_group_open:
-        svg += "  </g>\n"
+        svg += "  </svg>\n"
     svg += "</svg>\n"
     return svg^
+
+
+def _encode_svg(plan: RenderPlan) raises -> String:
+    """Encode with default Typst options, used only by marked math text."""
+    return _encode_svg(plan, TypstOptions())
 
 
 def encode_svg(plan: RenderPlan) raises -> String:
@@ -641,6 +923,12 @@ def encode_svg(plan: RenderPlan) raises -> String:
     return _encode_svg(plan)
 
 
+def encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
+    """Encode with explicit limits for any marked Typst mathematical text."""
+    plan.validate()
+    return _encode_svg(plan, options)
+
+
 def render_svg(
     figure: Figure,
     width: Float64,
@@ -649,24 +937,18 @@ def render_svg(
 ) raises -> String:
     """Render ``figure`` to a complete deterministic SVG document.
 
-    Empty figures are rejected. Nonconstant data bounds receive a five-percent
-    margin on each side; each remaining constant axis is padded by the larger of
-    0.5 or five percent of the constant's magnitude before ticks and scales are
-    built. A logarithmic axis instead receives five-percent padding in base-10
-    exponent space, while a constant logarithmic domain receives one decade on
-    either side. Logarithmic rendering rejects a non-positive explicit lower
-    limit or the first non-positive per-series minimum in insertion order, with
-    axis, series, and value context. Explicit axis limits replace autoscale rules
-    exactly on their own axis. Invalid figure sizes or margins and any unsafe
-    derived domain also raise before encoding.
-    Automatic palette slots are resolved while walking insertion order; only
-    automatic series advance the counter, which starts at zero and cycles modulo
-    six. Legend rows are 14 units high with five-unit vertical padding; width is
-    five units per Unicode codepoint plus six-unit side paddings, a 16-unit glyph,
-    and a five-unit glyph/text gap, avoiding platform text measurement. A
-    nonempty title adds a fixed 18-unit top band to ``margins``; nonempty x- and
-    y-axis labels add fixed 14-unit bottom and left bands. Series geometry is
-    always clipped to the plot-area rectangle.
+    Empty figures are rejected. Automatic linear and logarithmic domains are
+    padded safely and expanded when necessary so point-sized endpoint markers
+    and strokes fit the measured plot viewport. Explicit axis limits remain
+    exact and clip intentionally. Logarithmic rendering rejects non-positive
+    data, limits, and ticks with axis and series context.
+
+    CJK/emoji-aware fallback metrics drive adaptive margins, title wrapping,
+    axis-label fitting, tick-label selection, and legend sizing. Every tick and
+    grid mark is retained even when overlapping labels are omitted. Automatic
+    palette slots are resolved in insertion order, and ``BEST`` legends score
+    the four plot corners against rendered geometry. Series geometry is clipped
+    to the exact plot-area viewport.
     Geometry uses fixed-point formatting with at most three fractional digits,
     half-away-from-zero rounding, stripped trailing zeros, normalized negative
     zero, and no exponent notation. The hand-written encoder emits a fixed
@@ -680,15 +962,42 @@ def render_svg(
 
 def render_svg(
     figure: Figure,
-    width: Float64 = 640.0,
-    height: Float64 = 480.0,
+    width: Float64,
+    height: Float64,
+    margins: Margins,
+    options: TypstOptions,
 ) raises -> String:
-    """Render with a 640x480 default size and margins of 40/12/12/28.
+    """Render explicit geometry with options for marked Typst text."""
+    return _encode_svg(build_render_plan(figure, width, height, margins), options)
 
-    A nonempty title reserves a deterministic 18-unit top band. Nonempty x- and
-    y-axis labels reserve deterministic 14-unit bottom and left bands.
-    """
-    return render_svg(figure, width, height, Margins(40.0, 12.0, 12.0, 28.0))
+
+def render_svg(
+    figure: Figure,
+    width: Float64,
+    height: Float64,
+) raises -> String:
+    """Render legacy reference-pixel geometry with content-driven margins."""
+    return _encode_svg(build_render_plan(figure, width, height))
+
+
+def render_svg(
+    figure: Figure,
+    width: Float64,
+    height: Float64,
+    options: TypstOptions,
+) raises -> String:
+    """Render legacy geometry with options for marked Typst text."""
+    return _encode_svg(build_render_plan(figure, width, height), options)
+
+
+def render_svg(figure: Figure) raises -> String:
+    """Render stored physical size with DPI-independent logical geometry."""
+    return _encode_svg(build_render_plan(figure))
+
+
+def render_svg(figure: Figure, options: TypstOptions) raises -> String:
+    """Render stored geometry with options for marked Typst text."""
+    return _encode_svg(build_render_plan(figure), options)
 
 
 def write_svg(path: StringSlice, svg: StringSlice) raises:

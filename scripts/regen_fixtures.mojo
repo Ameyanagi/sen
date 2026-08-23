@@ -190,7 +190,7 @@ def main() raises:
     var titled = titled_labels_figure()
     save_svg(
         "tests/fixtures/titled_labels.svg",
-        render_svg(titled, 120.0, 80.0, margins),
+        render_svg(titled, 320.0, 200.0, margins),
     )
     var scatter = scatter_figure()
     save_svg(

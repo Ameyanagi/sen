@@ -1,9 +1,12 @@
 """Backend-neutral, device-space drawing commands produced from a Figure."""
 
-from std.collections import List
+from std.collections import List, Optional
 from std.math import isfinite
 
-from .style import LineStyle, MarkerStyle
+from .figure_config import FigureConfig
+from .style import LineCap, LineJoin, LineStyle, MarkerStyle
+from .text import TextKind
+from .theme import Theme
 
 
 struct _Validated:
@@ -91,8 +94,14 @@ struct DrawCommand(Copyable, Equatable):
     var palette_slot: Int
     var series_index: Int
     var line_width: Float64
+    var font_size: Float64
+    var text_kind: TextKind
     var line_style: LineStyle
     var marker_style: MarkerStyle
+    var marker_size: Float64
+    var opacity: Float64
+    var line_cap: LineCap
+    var line_join: LineJoin
 
     def __init__(
         out self,
@@ -109,6 +118,12 @@ struct DrawCommand(Copyable, Equatable):
         line_width: Float64,
         line_style: LineStyle,
         marker_style: MarkerStyle,
+        marker_size: Float64 = 6.0,
+        opacity: Float64 = 1.0,
+        line_cap: LineCap = LineCap.ROUND,
+        line_join: LineJoin = LineJoin.ROUND,
+        font_size: Float64 = 0.0,
+        text_kind: TextKind = TextKind.PLAIN,
     ) raises:
         self.kind = kind
         self.x1 = x1
@@ -121,8 +136,14 @@ struct DrawCommand(Copyable, Equatable):
         self.palette_slot = palette_slot
         self.series_index = series_index
         self.line_width = line_width
+        self.font_size = font_size
+        self.text_kind = text_kind
         self.line_style = line_style
         self.marker_style = marker_style
+        self.marker_size = marker_size
+        self.opacity = opacity
+        self.line_cap = line_cap
+        self.line_join = line_join
         self.validate()
 
     @staticmethod
@@ -140,6 +161,12 @@ struct DrawCommand(Copyable, Equatable):
         line_width: Float64,
         line_style: LineStyle,
         marker_style: MarkerStyle,
+        marker_size: Float64 = 6.0,
+        opacity: Float64 = 1.0,
+        line_cap: LineCap = LineCap.ROUND,
+        line_join: LineJoin = LineJoin.ROUND,
+        font_size: Float64 = 0.0,
+        text_kind: TextKind = TextKind.PLAIN,
     ) -> Self:
         return Self(
             kind,
@@ -155,6 +182,12 @@ struct DrawCommand(Copyable, Equatable):
             line_width,
             line_style,
             marker_style,
+            marker_size,
+            opacity,
+            line_cap,
+            line_join,
+            font_size,
+            text_kind,
             _validated=_Validated(),
         )
 
@@ -173,6 +206,12 @@ struct DrawCommand(Copyable, Equatable):
         line_width: Float64,
         line_style: LineStyle,
         marker_style: MarkerStyle,
+        marker_size: Float64,
+        opacity: Float64,
+        line_cap: LineCap,
+        line_join: LineJoin,
+        font_size: Float64,
+        text_kind: TextKind,
         *,
         _validated: _Validated,
     ):
@@ -187,8 +226,14 @@ struct DrawCommand(Copyable, Equatable):
         self.palette_slot = palette_slot
         self.series_index = series_index
         self.line_width = line_width
+        self.font_size = font_size
+        self.text_kind = text_kind
         self.line_style = line_style
         self.marker_style = marker_style
+        self.marker_size = marker_size
+        self.opacity = opacity
+        self.line_cap = line_cap
+        self.line_join = line_join
 
     def validate(self) raises:
         """Validate generic fields and the selected primitive's safe contract."""
@@ -202,6 +247,13 @@ struct DrawCommand(Copyable, Equatable):
             raise Error("render command geometry must be finite")
         if not isfinite(self.line_width) or self.line_width < 0.0:
             raise Error("render command line width must be finite and nonnegative")
+        if not isfinite(self.font_size) or self.font_size < 0.0:
+            raise Error("render command font size must be finite and nonnegative")
+        self.text_kind.validate()
+        if not isfinite(self.marker_size) or self.marker_size <= 0.0:
+            raise Error("render command marker size must be finite and positive")
+        if not isfinite(self.opacity) or self.opacity < 0.0 or self.opacity > 1.0:
+            raise Error("render command opacity must be finite and within 0..1")
         if self.palette_slot < -1 or self.palette_slot > 5:
             raise Error("render command palette slot must be within -1..5")
         if self.series_index < -1:
@@ -210,6 +262,8 @@ struct DrawCommand(Copyable, Equatable):
             raise Error("render command line style is outside Sen's vocabulary")
         if self.marker_style._value < 0 or self.marker_style._value > 7:
             raise Error("render command marker style is outside Sen's vocabulary")
+        self.line_cap.validate()
+        self.line_join.validate()
         for index in range(len(self.points)):
             self.points[index].validate()
 
@@ -271,6 +325,17 @@ struct DrawCommand(Copyable, Equatable):
             if self.line_width <= 0.0:
                 raise Error("render legend area commands require a positive line width")
 
+        var is_text = (
+            self.kind == CommandKind.X_LABEL
+            or self.kind == CommandKind.Y_LABEL
+            or self.kind == CommandKind.TITLE
+            or self.kind == CommandKind.X_TITLE
+            or self.kind == CommandKind.Y_TITLE
+            or self.kind == CommandKind.LEGEND_TEXT
+        )
+        if is_text and self.font_size <= 0.0:
+            raise Error("render text commands require a positive font size")
+
     def __eq__(self, other: Self) -> Bool:
         if (
             self.kind != other.kind
@@ -283,8 +348,14 @@ struct DrawCommand(Copyable, Equatable):
             or self.palette_slot != other.palette_slot
             or self.series_index != other.series_index
             or self.line_width != other.line_width
+            or self.font_size != other.font_size
+            or self.text_kind != other.text_kind
             or self.line_style != other.line_style
             or self.marker_style != other.marker_style
+            or self.marker_size != other.marker_size
+            or self.opacity != other.opacity
+            or self.line_cap != other.line_cap
+            or self.line_join != other.line_join
             or len(self.points) != len(other.points)
         ):
             return False
@@ -303,6 +374,9 @@ struct RenderPlan(Copyable, Equatable):
     var plot_y: Float64
     var plot_width: Float64
     var plot_height: Float64
+    var theme: Theme
+    var figure_config: Optional[FigureConfig]
+    var accessible_title: String
     var commands: List[DrawCommand]
 
     def __init__(
@@ -314,6 +388,9 @@ struct RenderPlan(Copyable, Equatable):
         plot_width: Float64,
         plot_height: Float64,
         var commands: List[DrawCommand],
+        theme: Theme = Theme(),
+        figure_config: Optional[FigureConfig] = None,
+        var accessible_title: String = String(),
     ) raises:
         self.width = width
         self.height = height
@@ -321,6 +398,9 @@ struct RenderPlan(Copyable, Equatable):
         self.plot_y = plot_y
         self.plot_width = plot_width
         self.plot_height = plot_height
+        self.theme = theme
+        self.figure_config = figure_config
+        self.accessible_title = accessible_title^
         self.commands = commands^
         self.validate()
 
@@ -333,6 +413,9 @@ struct RenderPlan(Copyable, Equatable):
         plot_width: Float64,
         plot_height: Float64,
         var commands: List[DrawCommand],
+        theme: Theme = Theme(),
+        figure_config: Optional[FigureConfig] = None,
+        var accessible_title: String = String(),
     ) -> Self:
         return Self(
             width,
@@ -342,6 +425,9 @@ struct RenderPlan(Copyable, Equatable):
             plot_width,
             plot_height,
             commands^,
+            theme,
+            figure_config,
+            accessible_title^,
             _validated=_Validated(),
         )
 
@@ -354,6 +440,9 @@ struct RenderPlan(Copyable, Equatable):
         plot_width: Float64,
         plot_height: Float64,
         var commands: List[DrawCommand],
+        theme: Theme,
+        figure_config: Optional[FigureConfig],
+        var accessible_title: String,
         *,
         _validated: _Validated,
     ):
@@ -363,6 +452,9 @@ struct RenderPlan(Copyable, Equatable):
         self.plot_y = plot_y
         self.plot_width = plot_width
         self.plot_height = plot_height
+        self.theme = theme
+        self.figure_config = figure_config
+        self.accessible_title = accessible_title^
         self.commands = commands^
 
     def command_count(self) -> Int:
@@ -377,6 +469,7 @@ struct RenderPlan(Copyable, Equatable):
 
     def validate(self) raises:
         """Validate finite positive geometry and every ordered command."""
+        self.theme.validate()
         if (
             not isfinite(self.width)
             or not isfinite(self.height)
@@ -399,6 +492,16 @@ struct RenderPlan(Copyable, Equatable):
             raise Error("render-plan plot rectangle must fit within the figure")
         if len(self.commands) == 0:
             raise Error("render-plan must contain at least one command")
+        if self.figure_config:
+            var config = self.figure_config.value()
+            config.validate()
+            if (
+                config.logical_width() != self.width
+                or config.logical_height() != self.height
+            ):
+                raise Error(
+                    "render-plan figure configuration must match logical geometry"
+                )
         for index in range(len(self.commands)):
             self.commands[index].validate()
 
@@ -410,6 +513,9 @@ struct RenderPlan(Copyable, Equatable):
             or self.plot_y != other.plot_y
             or self.plot_width != other.plot_width
             or self.plot_height != other.plot_height
+            or self.theme != other.theme
+            or self.figure_config != other.figure_config
+            or self.accessible_title != other.accessible_title
             or len(self.commands) != len(other.commands)
         ):
             return False

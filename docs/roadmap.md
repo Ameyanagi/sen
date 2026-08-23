@@ -94,6 +94,15 @@ neither project changes its core semantic model merely to fit the other.
   output.
 - [x] Make x/y ticks, automatic-limit restoration, Figure/Plot rendering, and
   prepared-plan SVG encoding symmetric and explicit.
+- [x] Separate physical size from export DPI; add themes, semantic point-based
+  typography and series styling, CJK-aware adaptive layout, and automatic
+  overlap-scored legends.
+- [x] Add renderer-backed Typst math fragments without making plain-text plots
+  depend on an external executable.
+- [x] Add locale-specific CJK font selection and language metadata for Japanese,
+  Simplified Chinese, Traditional Chinese, and Korean.
+- [x] Add deterministic, word-aware title wrapping and grapheme-safe ellipsis.
+- Add compact, outside, or below-plot legends for small physical figures.
 - Submit a modular-community recipe when SVG plotting is useful by itself.
 
 ## v0.3 — Performance

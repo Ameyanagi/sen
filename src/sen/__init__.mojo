@@ -1,5 +1,6 @@
 """Renderer-independent scientific plotting semantics for Mojo."""
 
+from .figure_config import FigureConfig
 from .layout import Margins, Rect, plot_area
 from .lowering import build_render_plan
 from .plot import Plot
@@ -26,5 +27,8 @@ from .series import (
     ScatterSeries,
     StepMode,
 )
-from .style import LineStyle, MarkerStyle, SeriesStyle
+from .style import LineCap, LineJoin, LineStyle, MarkerStyle, SeriesStyle
 from .svg import encode_svg, render_svg, save_svg, write_svg
+from .text import Text, TextKind
+from .theme import TextLocale, Theme, Typography
+from .typst import TypstOptions

@@ -308,7 +308,7 @@ def test_plot_figure_bridges_preserve_semantics_without_copies() raises:
 
     var default_plan = plot.build_render_plan(240.0, 160.0)
     var default_reference = build_render_plan(
-        plot.figure(), 240.0, 160.0, Margins(40.0, 12.0, 12.0, 28.0)
+        plot.figure(), 240.0, 160.0, Margins(12.0, 12.0, 12.0, 12.0)
     )
     assert_true(default_plan == default_reference)
 

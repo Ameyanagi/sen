@@ -4,8 +4,12 @@ from std.collections import List, Optional
 from std.math import isfinite
 from std.sys import simd_width_of
 
+from .figure_config import FigureConfig
 from .layout import Margins
 from .style import SeriesStyle
+from .text import Text, TextKind
+from .theme import Theme
+from .typst import TypstOptions
 
 
 struct _Validated:
@@ -1634,6 +1638,7 @@ struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
     comptime LOWER_LEFT = LegendPosition(_value=2)
     comptime LOWER_RIGHT = LegendPosition(_value=3)
     comptime NONE = LegendPosition(_value=4)
+    comptime BEST = LegendPosition(_value=5)
 
     def __init__(out self, *, _value: Int):
         """Construct a position discriminant for library-defined constants."""
@@ -1645,7 +1650,7 @@ struct LegendPosition(Copyable, Equatable, ImplicitlyCopyable):
 
     def validate(self) raises:
         """Reject discriminants outside Sen's legend-position vocabulary."""
-        if self._value < 0 or self._value > 4:
+        if self._value < 0 or self._value > 5:
             raise Error("legend position is outside Sen's vocabulary")
 
 
@@ -1679,10 +1684,15 @@ struct Figure(Copyable):
     var _rectangle_styles: List[SeriesStyle]
     var _order: List[_SeriesOrder]
     var _title: String
+    var _title_kind: TextKind
     var _x_label: String
+    var _x_label_kind: TextKind
     var _y_label: String
+    var _y_label_kind: TextKind
     var _legend_position: LegendPosition
     var _grid_enabled: Bool
+    var _config: FigureConfig
+    var _theme: Theme
     var _x_scale: AxisKind
     var _y_scale: AxisKind
     var _has_x_limits: Bool
@@ -1714,10 +1724,15 @@ struct Figure(Copyable):
         self._rectangle_styles = List[SeriesStyle]()
         self._order = List[_SeriesOrder]()
         self._title = String()
+        self._title_kind = TextKind.PLAIN
         self._x_label = String()
+        self._x_label_kind = TextKind.PLAIN
         self._y_label = String()
-        self._legend_position = LegendPosition.UPPER_RIGHT
+        self._y_label_kind = TextKind.PLAIN
+        self._legend_position = LegendPosition.BEST
         self._grid_enabled = False
+        self._config = FigureConfig()
+        self._theme = Theme()
         self._x_scale = AxisKind.LINEAR
         self._y_scale = AxisKind.LINEAR
         self._has_x_limits = False
@@ -2038,14 +2053,32 @@ struct Figure(Copyable):
     def set_title(mut self, var title: String):
         """Set title text exactly and deterministically without raising."""
         self._title = title^
+        self._title_kind = TextKind.PLAIN
+
+    def set_title(mut self, title: Text):
+        """Set plain or explicitly marked Typst title text by value."""
+        self._title = title.source()
+        self._title_kind = title.kind()
 
     def set_x_label(mut self, var label: String):
         """Set x-axis label text exactly and deterministically without raising."""
         self._x_label = label^
+        self._x_label_kind = TextKind.PLAIN
+
+    def set_x_label(mut self, label: Text):
+        """Set a plain or explicitly marked Typst x-axis label."""
+        self._x_label = label.source()
+        self._x_label_kind = label.kind()
 
     def set_y_label(mut self, var label: String):
         """Set y-axis label text exactly and deterministically without raising."""
         self._y_label = label^
+        self._y_label_kind = TextKind.PLAIN
+
+    def set_y_label(mut self, label: Text):
+        """Set a plain or explicitly marked Typst y-axis label."""
+        self._y_label = label.source()
+        self._y_label_kind = label.kind()
 
     def set_legend(mut self, position: LegendPosition):
         """Set deterministic legend placement without validation or raising."""
@@ -2054,6 +2087,28 @@ struct Figure(Copyable):
     def set_grid(mut self, enabled: Bool):
         """Enable or disable deterministic major gridlines without raising."""
         self._grid_enabled = enabled
+
+    def set_config(mut self, config: FigureConfig) raises:
+        """Replace physical size and export DPI after validating them."""
+        config.validate()
+        self._config = config
+
+    def set_size(mut self, width: Float64, height: Float64) raises:
+        """Set physical size in inches without changing export DPI."""
+        self._config = self._config.with_size(width, height)
+
+    def set_size_px(mut self, width: Int, height: Int) raises:
+        """Set physical size from pixels at the current unchanged DPI."""
+        self._config = self._config.with_size_px(width, height)
+
+    def set_dpi(mut self, dpi: Float64) raises:
+        """Set export DPI without changing the stored physical size."""
+        self._config = self._config.with_dpi(dpi)
+
+    def set_theme(mut self, theme: Theme) raises:
+        """Replace backend-independent visual values after validation."""
+        theme.validate()
+        self._theme = theme
 
     def set_x_scale(mut self, scale: AxisKind):
         """Select x mapping without raising; LOG10 positivity is render-checked."""
@@ -2120,6 +2175,16 @@ struct Figure(Copyable):
                     positions[index],
                     "; replace the invalid position",
                 )
+            if index > 0 and positions[index] <= positions[index - 1]:
+                raise Error(
+                    "x tick positions must be strictly increasing; index ",
+                    index,
+                    " has value ",
+                    positions[index],
+                    ", which is not greater than previous value ",
+                    positions[index - 1],
+                    "; sort positions and remove duplicates",
+                )
             stored_positions.append(positions[index])
             stored_labels.append(labels[index].copy())
         self._has_x_ticks = True
@@ -2157,6 +2222,16 @@ struct Figure(Copyable):
                     positions[index],
                     "; replace the invalid position",
                 )
+            if index > 0 and positions[index] <= positions[index - 1]:
+                raise Error(
+                    "y tick positions must be strictly increasing; index ",
+                    index,
+                    " has value ",
+                    positions[index],
+                    ", which is not greater than previous value ",
+                    positions[index - 1],
+                    "; sort positions and remove duplicates",
+                )
             stored_positions.append(positions[index])
             stored_labels.append(labels[index].copy())
         self._has_y_ticks = True
@@ -2173,13 +2248,37 @@ struct Figure(Copyable):
         """Return the exact stored title by read reference without raising."""
         return self._title
 
+    def title_text(self) -> Text:
+        """Return the stored title source and interpretation by value."""
+        return Text(_kind=self._title_kind, _source=self._title)
+
+    def title_kind(self) -> TextKind:
+        """Return the title interpretation without copying its source."""
+        return self._title_kind
+
     def x_label(self) -> ref[self._x_label] String:
         """Return the exact stored x label by read reference without raising."""
         return self._x_label
 
+    def x_label_text(self) -> Text:
+        """Return the stored x-axis label and interpretation by value."""
+        return Text(_kind=self._x_label_kind, _source=self._x_label)
+
+    def x_label_kind(self) -> TextKind:
+        """Return the x-axis label interpretation without copying its source."""
+        return self._x_label_kind
+
     def y_label(self) -> ref[self._y_label] String:
         """Return the exact stored y label by read reference without raising."""
         return self._y_label
+
+    def y_label_text(self) -> Text:
+        """Return the stored y-axis label and interpretation by value."""
+        return Text(_kind=self._y_label_kind, _source=self._y_label)
+
+    def y_label_kind(self) -> TextKind:
+        """Return the y-axis label interpretation without copying its source."""
+        return self._y_label_kind
 
     def legend_position(self) -> LegendPosition:
         """Return deterministic legend placement without raising."""
@@ -2188,6 +2287,14 @@ struct Figure(Copyable):
     def grid_enabled(self) -> Bool:
         """Return the stored major-grid flag without raising."""
         return self._grid_enabled
+
+    def config(self) -> FigureConfig:
+        """Return physical size and export DPI by value."""
+        return self._config
+
+    def theme(self) -> Theme:
+        """Return backend-independent visual values by value."""
+        return self._theme
 
     def x_scale(self) -> AxisKind:
         """Return the x-axis transform selection without data validation."""
@@ -2275,9 +2382,14 @@ struct Figure(Copyable):
 
     def _validate_render_configuration(self) raises:
         """Reject nominal fallthroughs without rescanning retained point data."""
+        self._config.validate()
+        self._theme.validate()
         self._x_scale.validate()
         self._y_scale.validate()
         self._legend_position.validate()
+        self._title_kind.validate()
+        self._x_label_kind.validate()
+        self._y_label_kind.validate()
         for style in self._line_styles:
             style.validate()
         for style in self._scatter_styles:
@@ -2289,9 +2401,14 @@ struct Figure(Copyable):
 
     def validate(self) raises:
         """Validate all stored invariants in deterministic field and index order."""
+        self._config.validate()
+        self._theme.validate()
         self._x_scale.validate()
         self._y_scale.validate()
         self._legend_position.validate()
+        self._title_kind.validate()
+        self._x_label_kind.validate()
+        self._y_label_kind.validate()
         if self._has_x_limits:
             if not isfinite(self._x_limit_lo) or not isfinite(self._x_limit_hi):
                 raise Error(
@@ -2773,13 +2890,25 @@ struct Figure(Copyable):
 
     def render_svg(
         self,
-        width: Float64 = 640.0,
-        height: Float64 = 480.0,
+        width: Float64,
+        height: Float64,
     ) raises -> String:
-        """Render this figure in memory using Sen's default margins."""
+        """Render legacy reference-pixel geometry with adaptive margins."""
         from .svg import render_svg
 
         return render_svg(self, width, height)
+
+    def render_svg(self) raises -> String:
+        """Render stored physical size with DPI-independent logical geometry."""
+        from .svg import render_svg
+
+        return render_svg(self)
+
+    def render_svg(self, options: TypstOptions) raises -> String:
+        """Render stored geometry with options for marked Typst text."""
+        from .svg import render_svg
+
+        return render_svg(self, options)
 
     def save_svg(
         self,
@@ -2797,8 +2926,8 @@ struct Figure(Copyable):
     def save_svg(
         self,
         path: StringSlice,
-        width: Float64 = 640.0,
-        height: Float64 = 480.0,
+        width: Float64,
+        height: Float64,
     ) raises:
         """Render at the requested size and save it deterministically.
 
@@ -2808,4 +2937,18 @@ struct Figure(Copyable):
         from .svg import render_svg, write_svg
 
         var svg = render_svg(self, width, height)
+        write_svg(path, svg)
+
+    def save_svg(self, path: StringSlice) raises:
+        """Render stored physical geometry and save it deterministically."""
+        from .svg import render_svg, write_svg
+
+        var svg = render_svg(self)
+        write_svg(path, svg)
+
+    def save_svg(self, path: StringSlice, options: TypstOptions) raises:
+        """Render optional Typst text and replace ``path`` with the SVG."""
+        from .svg import render_svg, write_svg
+
+        var svg = render_svg(self, options)
         write_svg(path, svg)

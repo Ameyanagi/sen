@@ -55,8 +55,56 @@ struct MarkerStyle(Copyable, Equatable, ImplicitlyCopyable):
             raise Error("marker style is outside Sen's vocabulary")
 
 
-def _parse_hex_color(color: StringSlice) raises -> String:
-    """Validate and lowercase a strict six-digit hexadecimal series color."""
+struct LineCap(Copyable, Equatable, ImplicitlyCopyable):
+    """A nominal line-end treatment with fixed validated constants."""
+
+    var _value: Int
+
+    comptime BUTT = LineCap(_value=0)
+    comptime ROUND = LineCap(_value=1)
+    comptime SQUARE = LineCap(_value=2)
+
+    def __init__(out self, *, _value: Int):
+        """Construct a line-cap discriminant for library-defined constants."""
+        self._value = _value
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return whether two line caps have the same discriminant."""
+        return self._value == other._value
+
+    def validate(self) raises:
+        """Reject discriminants outside Sen's fixed line-cap vocabulary."""
+        if self._value < 0 or self._value > 2:
+            raise Error("line cap is outside Sen's vocabulary")
+
+
+struct LineJoin(Copyable, Equatable, ImplicitlyCopyable):
+    """A nominal line-corner treatment with fixed validated constants."""
+
+    var _value: Int
+
+    comptime MITER = LineJoin(_value=0)
+    comptime ROUND = LineJoin(_value=1)
+    comptime BEVEL = LineJoin(_value=2)
+
+    def __init__(out self, *, _value: Int):
+        """Construct a line-join discriminant for library-defined constants."""
+        self._value = _value
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return whether two line joins have the same discriminant."""
+        return self._value == other._value
+
+    def validate(self) raises:
+        """Reject discriminants outside Sen's fixed line-join vocabulary."""
+        if self._value < 0 or self._value > 2:
+            raise Error("line join is outside Sen's vocabulary")
+
+
+def _parse_hex_color(
+    color: StringSlice, role: StringSlice = "series color"
+) raises -> String:
+    """Validate and lowercase a strict six-digit hexadecimal color."""
     var valid = color.byte_length() == 7
     if valid:
         valid = color[byte=:1] == "#"
@@ -72,9 +120,10 @@ def _parse_hex_color(color: StringSlice) raises -> String:
                 break
     if not valid:
         raise Error(
+            role,
             (
-                "series color must be '#' followed by exactly six hexadecimal "
-                "digits, like '#1f77b4'; got '"
+                " must be '#' followed by exactly six hexadecimal digits, like "
+                "'#1f77b4'; got '"
             ),
             color,
             "'",
@@ -98,6 +147,10 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
     var _line_style: LineStyle
     var _marker_style: MarkerStyle
     var _line_width: Float64
+    var _marker_size: Float64
+    var _opacity: Float64
+    var _line_cap: LineCap
+    var _line_join: LineJoin
 
     def __init__(out self):
         """Construct deterministic automatic defaults without raising."""
@@ -106,6 +159,10 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
         self._line_width = 1.5
+        self._marker_size = 6.0
+        self._opacity = 1.0
+        self._line_cap = LineCap.ROUND
+        self._line_join = LineJoin.ROUND
 
     def __init__(out self, *, color_index: Int) raises:
         """Construct an explicit palette style.
@@ -125,6 +182,10 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
         self._line_width = 1.5
+        self._marker_size = 6.0
+        self._opacity = 1.0
+        self._line_cap = LineCap.ROUND
+        self._line_join = LineJoin.ROUND
 
     def __init__(out self, *, color: StringSlice) raises:
         """Construct a style with a normalized custom hexadecimal color."""
@@ -133,9 +194,13 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         self._line_style = LineStyle.SOLID
         self._marker_style = MarkerStyle.CIRCLE
         self._line_width = 1.5
+        self._marker_size = 6.0
+        self._opacity = 1.0
+        self._line_cap = LineCap.ROUND
+        self._line_join = LineJoin.ROUND
 
     def with_line_width(self, width: Float64) raises -> Self:
-        """Return a copy with ``width`` without changing the receiver.
+        """Return a copy with ``width`` in points without changing the receiver.
 
         Raises when ``width`` is non-finite or not strictly positive.
         The remaining style fields are copied exactly and deterministically.
@@ -144,6 +209,28 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
             raise Error("series line width must be finite and positive; got ", width)
         var result = self.copy()
         result._line_width = width
+        return result^
+
+    def with_marker_size(self, size: Float64) raises -> Self:
+        """Return a copy with marker ``size`` in points.
+
+        Raises when ``size`` is non-finite or not strictly positive.
+        """
+        if not isfinite(size) or size <= 0.0:
+            raise Error("series marker size must be finite and positive; got ", size)
+        var result = self.copy()
+        result._marker_size = size
+        return result^
+
+    def with_opacity(self, opacity: Float64) raises -> Self:
+        """Return a copy with an opacity in the inclusive range zero to one."""
+        if not isfinite(opacity) or opacity < 0.0 or opacity > 1.0:
+            raise Error(
+                "series opacity must be finite and in the range 0..1; got ",
+                opacity,
+            )
+        var result = self.copy()
+        result._opacity = opacity
         return result^
 
     def with_color(self, color: StringSlice) raises -> Self:
@@ -167,13 +254,24 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         result._marker_style = marker
         return result^
 
+    def with_line_cap(self, line_cap: LineCap) -> Self:
+        """Return a deterministic copy with ``line_cap``; this never raises."""
+        var result = self.copy()
+        result._line_cap = line_cap
+        return result^
+
+    def with_line_join(self, line_join: LineJoin) -> Self:
+        """Return a deterministic copy with ``line_join``; this never raises."""
+        var result = self.copy()
+        result._line_join = line_join
+        return result^
+
     def validate(self) raises:
         """Validate every stored style field in deterministic order.
 
-        Raises when the slot is outside ``-1..5`` or the width is non-finite or
-        not strictly positive, when a nonempty custom color is not strict hex,
-        or when either nominal style is outside Sen's fixed vocabulary. Checks
-        run in stable palette-width-color-line-marker order.
+        Raises when the slot is outside ``-1..5``, a point size is invalid,
+        opacity is outside ``0..1``, a nonempty custom color is not strict hex,
+        or a nominal style is outside Sen's fixed vocabulary.
         """
         if self._palette_slot < -1 or self._palette_slot > 5:
             raise Error(
@@ -186,10 +284,22 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
                 "series line width must be finite and positive; got ",
                 self._line_width,
             )
+        if not isfinite(self._marker_size) or self._marker_size <= 0.0:
+            raise Error(
+                "series marker size must be finite and positive; got ",
+                self._marker_size,
+            )
+        if not isfinite(self._opacity) or self._opacity < 0.0 or self._opacity > 1.0:
+            raise Error(
+                "series opacity must be finite and in the range 0..1; got ",
+                self._opacity,
+            )
         if self._custom_color.byte_length() > 0:
             _ = _parse_hex_color(self._custom_color)
         self._line_style.validate()
         self._marker_style.validate()
+        self._line_cap.validate()
+        self._line_join.validate()
 
     def palette_slot(self) -> Int:
         """Return deterministic ``-1`` or an explicit slot without raising."""
@@ -208,8 +318,24 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
         return self._marker_style
 
     def line_width(self) -> Float64:
-        """Return the validated positive width without raising."""
+        """Return the validated positive line width in points."""
         return self._line_width
+
+    def marker_size(self) -> Float64:
+        """Return the validated positive marker size in points."""
+        return self._marker_size
+
+    def opacity(self) -> Float64:
+        """Return the validated series opacity without raising."""
+        return self._opacity
+
+    def line_cap(self) -> LineCap:
+        """Return the exact line-end treatment without raising."""
+        return self._line_cap
+
+    def line_join(self) -> LineJoin:
+        """Return the exact line-corner treatment without raising."""
+        return self._line_join
 
     def __eq__(self, other: Self) -> Bool:
         """Return exact deterministic field equality without raising."""
@@ -219,6 +345,10 @@ struct SeriesStyle(Copyable, Equatable, ImplicitlyCopyable):
             and self._line_style == other._line_style
             and self._marker_style == other._marker_style
             and self._line_width == other._line_width
+            and self._marker_size == other._marker_size
+            and self._opacity == other._opacity
+            and self._line_cap == other._line_cap
+            and self._line_join == other._line_join
         )
 
 

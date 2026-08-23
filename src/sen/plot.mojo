@@ -6,6 +6,9 @@ from .render_plan import RenderPlan
 from .series import AxisKind, Figure, LegendPosition, MissingPolicy, StepMode
 from .style import SeriesStyle
 from .svg import render_svg as _render_figure_svg, write_svg as _write_svg
+from .text import Text
+from .theme import Theme
+from .typst import TypstOptions
 
 
 struct Plot(Copyable):
@@ -424,6 +427,53 @@ struct Plot(Copyable):
         self.title(text^)
         return self^
 
+    def title(mut self, text: Text):
+        """Set a plain or explicitly marked Typst title."""
+        self._figure.set_title(text)
+
+    def with_title(var self, text: Text) -> Self:
+        """Consume this plot, set interpreted title text, and return it."""
+        self.title(text)
+        return self^
+
+    def size(mut self, width_inches: Float64, height_inches: Float64) raises:
+        """Set physical output size independently from raster density."""
+        self._figure.set_size(width_inches, height_inches)
+
+    def with_size(
+        var self, width_inches: Float64, height_inches: Float64
+    ) raises -> Self:
+        """Consume this plot, set its physical output size, and return it."""
+        self.size(width_inches, height_inches)
+        return self^
+
+    def size_px(mut self, width_px: Int, height_px: Int) raises:
+        """Set pixel size by conversion through the current, unchanged DPI."""
+        self._figure.set_size_px(width_px, height_px)
+
+    def with_size_px(var self, width_px: Int, height_px: Int) raises -> Self:
+        """Consume this plot, set its pixel size at current DPI, and return it."""
+        self.size_px(width_px, height_px)
+        return self^
+
+    def dpi(mut self, value: Float64) raises:
+        """Set raster density without changing the stored physical size."""
+        self._figure.set_dpi(value)
+
+    def with_dpi(var self, value: Float64) raises -> Self:
+        """Consume this plot, set raster density, and return it."""
+        self.dpi(value)
+        return self^
+
+    def theme(mut self, var value: Theme) raises:
+        """Replace the figure theme after validating it."""
+        self._figure.set_theme(value^)
+
+    def with_theme(var self, var value: Theme) raises -> Self:
+        """Consume this plot, replace its theme, and return it."""
+        self.theme(value^)
+        return self^
+
     def xlabel(mut self, var text: String):
         """Set the x-axis label exactly as supplied."""
         self._figure.set_x_label(text^)
@@ -433,6 +483,15 @@ struct Plot(Copyable):
         self.xlabel(text^)
         return self^
 
+    def xlabel(mut self, text: Text):
+        """Set a plain or explicitly marked Typst x-axis label."""
+        self._figure.set_x_label(text)
+
+    def with_xlabel(var self, text: Text) -> Self:
+        """Consume this plot, set interpreted x-axis text, and return it."""
+        self.xlabel(text)
+        return self^
+
     def ylabel(mut self, var text: String):
         """Set the y-axis label exactly as supplied."""
         self._figure.set_y_label(text^)
@@ -440,6 +499,15 @@ struct Plot(Copyable):
     def with_ylabel(var self, var text: String) -> Self:
         """Consume this plot, set its y-axis label, and return it."""
         self.ylabel(text^)
+        return self^
+
+    def ylabel(mut self, text: Text):
+        """Set a plain or explicitly marked Typst y-axis label."""
+        self._figure.set_y_label(text)
+
+    def with_ylabel(var self, text: Text) -> Self:
+        """Consume this plot, set interpreted y-axis text, and return it."""
+        self.ylabel(text)
         return self^
 
     def grid(mut self, enabled: Bool = True):
@@ -557,13 +625,11 @@ struct Plot(Copyable):
         self.clear_yticks()
         return self^
 
-    def legend(mut self, position: LegendPosition = LegendPosition.UPPER_RIGHT):
+    def legend(mut self, position: LegendPosition = LegendPosition.BEST):
         """Show the legend at ``position`` or suppress it with ``NONE``."""
         self._figure.set_legend(position)
 
-    def with_legend(
-        var self, position: LegendPosition = LegendPosition.UPPER_RIGHT
-    ) -> Self:
+    def with_legend(var self, position: LegendPosition = LegendPosition.BEST) -> Self:
         """Consume this plot, set its legend position, and return it."""
         self.legend(position)
         return self^
@@ -579,16 +645,15 @@ struct Plot(Copyable):
 
     def build_render_plan(
         self,
-        width: Float64 = 640.0,
-        height: Float64 = 480.0,
+        width: Float64,
+        height: Float64,
     ) raises -> RenderPlan:
-        """Lower this plot using Sen's default canvas and margins."""
-        return _build_figure_render_plan(
-            self._figure,
-            width,
-            height,
-            Margins(40.0, 12.0, 12.0, 28.0),
-        )
+        """Lower legacy reference-pixel geometry with adaptive margins."""
+        return _build_figure_render_plan(self._figure, width, height)
+
+    def build_render_plan(self) raises -> RenderPlan:
+        """Lower using the plot's stored physical size and logical geometry."""
+        return _build_figure_render_plan(self._figure)
 
     def render_svg(
         self,
@@ -601,11 +666,19 @@ struct Plot(Copyable):
 
     def render_svg(
         self,
-        width: Float64 = 640.0,
-        height: Float64 = 480.0,
+        width: Float64,
+        height: Float64,
     ) raises -> String:
-        """Render SVG with the backend's predictable default geometry."""
+        """Render legacy reference-pixel geometry with adaptive margins."""
         return _render_figure_svg(self._figure, width, height)
+
+    def render_svg(self) raises -> String:
+        """Render SVG at stored physical size with DPI-independent layout."""
+        return _render_figure_svg(self._figure)
+
+    def render_svg(self, options: TypstOptions) raises -> String:
+        """Render with explicit limits for marked Typst mathematical text."""
+        return _render_figure_svg(self._figure, options)
 
     def save_svg(
         self,
@@ -621,9 +694,19 @@ struct Plot(Copyable):
     def save_svg(
         self,
         path: StringSlice,
-        width: Float64 = 640.0,
-        height: Float64 = 480.0,
+        width: Float64,
+        height: Float64,
     ) raises:
         """Render once with the requested size and replace ``path`` with its SVG."""
         var svg = _render_figure_svg(self._figure, width, height)
+        _write_svg(path, svg)
+
+    def save_svg(self, path: StringSlice) raises:
+        """Render stored physical geometry and replace ``path`` with its SVG."""
+        var svg = _render_figure_svg(self._figure)
+        _write_svg(path, svg)
+
+    def save_svg(self, path: StringSlice, options: TypstOptions) raises:
+        """Render optional Typst text and replace ``path`` with its SVG."""
+        var svg = _render_figure_svg(self._figure, options)
         _write_svg(path, svg)

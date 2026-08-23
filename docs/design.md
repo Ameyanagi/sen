@@ -76,17 +76,51 @@ Commands are ordered as background, plot frame, optional x then y grid lines, x
 axis followed by each tick/label pair, y axis followed by each tick/label pair,
 title/x-title/y-title when present, series primitives in figure insertion order,
 then the legend background and each labeled row's glyph/text pair in that same
-insertion order. The SVG adapter emits its clip definition before those commands
-and wraps the contiguous series block in one plot-area clip group. Attributes
-are fixed left to right: the root
-uses `xmlns`, `width`, `height`, `viewBox`; rectangles use `x`, `y`, `width`,
-`height`, `fill`, followed when present by `stroke`, `stroke-width`; lines use
-`x1`, `y1`, `x2`, `y2`, `stroke`, `stroke-width`; text uses `x`, `y`, `fill`,
-`font-family`, `font-size`, `text-anchor`; and polylines use `points`, `fill`,
-`stroke`, `stroke-width`. Area polygons additionally use a fixed fill opacity.
+insertion order. The SVG adapter places the contiguous series block in a nested
+SVG viewport. This clips series without a document-global identifier.
+Plain-text figures can therefore be embedded together directly; figures
+containing Typst fragments use the caller-supplied `TypstOptions` ID prefix
+described below. Attributes are fixed left to right: the root uses `xmlns`,
+`role`, optional `lang`/`xml:lang`, `width`, `height`, `viewBox`; rectangles use
+`x`, `y`, `width`, `height`, `fill`, followed when present by `stroke`,
+`stroke-width`; lines use `x1`, `y1`, `x2`, `y2`, `stroke`, `stroke-width`;
+text uses `x`, `y`, `fill`, `font-family`, `font-size`, `text-anchor`; and
+polylines use `points`, `fill`, `stroke`, `stroke-width`. Area polygons
+additionally use a fixed fill opacity.
 Filled data rectangles and areas use the same insertion-indexed semantic
 classes as other series. An area legend glyph preserves its polygon's color,
-fixed opacity, outline width, and dash style.
+opacity, outline width, cap, join, and dash style.
+
+The configured renderer stores physical width and height in inches, uses a
+stable 100-logical-unit-per-inch view box, and keeps export DPI separate. Thus
+changing only DPI leaves SVG bytes and layout unchanged while changing future
+raster dimensions. Point-based typography, line widths, and marker diameters
+are converted once to logical units. Legacy explicit width/height overloads
+continue to accept logical coordinates.
+
+Layout starts from deterministic CJK/emoji-aware fallback text metrics rather
+than host font discovery. The renderer expands the minimum margins for actual
+tick, title, axis-label, and legend extents; fits an overlong title at word or
+grapheme boundaries; emits every tick/grid mark while greedily selecting
+non-overlapping labels; and places an automatic legend in the lowest-overlap
+plot corner. Rendering remains deterministic across hosts.
+
+An explicit CJK locale selects a language-specific Japanese, Simplified
+Chinese, Traditional Chinese, or Korean fallback order and is copied to SVG
+`lang` and `xml:lang`. Locale-neutral `AUTO` remains available when content is
+mixed or unknown. The fallback metrics cover modern CJK ranges through Unicode
+17 Extension J, combining sequences, emoji ZWJ sequences, flags, and keycaps.
+
+Plain text is encoded directly and never starts a process. `Text.typst_math`
+is an explicit trusted-markup boundary: only marked title or axis-label roles
+invoke a local Typst compiler, and the resulting vector fragment is embedded in
+the role's nested SVG viewport. Sen quotes every dynamic shell argument,
+isolates compilation in a fresh temporary root, enforces source/output limits
+and a wall timeout, captures bounded diagnostics, prefixes generated SVG IDs by
+caller namespace, role, and command index, and raises after temporary cleanup.
+Callers inlining several complete Typst-enabled figures assign each one a
+distinct validated `TypstOptions` prefix. This is native Typst markup, not a
+LaTeX parser or compatibility claim.
 
 SVG geometry uses fixed decimal notation with at most three fractional digits.
 Values round half away from zero; trailing fractional zeros and a trailing point
@@ -102,6 +136,11 @@ percent of the constant's magnitude. If that interval cannot be represented as
 two distinct finite `Float64` values, rendering raises. Figures with no points
 also raise. Each connected line segment becomes one SVG `polyline`, preserving
 explicit gaps.
+
+Nonconstant automatic view bounds start with eight-percent padding, then expand
+further when required by the actual point-sized marker or stroke radius and the
+measured plot length. Explicit axis limits remain exact and intentionally clip
+geometry outside those limits.
 
 The renderer returns a `String` ending in exactly one newline after `</svg>`.
 `save_svg` is the separate I/O boundary; it creates missing parent directories

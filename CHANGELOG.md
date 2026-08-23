@@ -17,6 +17,19 @@ and uses semantic versioning.
 - Public `encode_svg(plan)` and `write_svg(path, svg)` prepared-output APIs;
   `save_svg(path, svg)` remains a compatibility alias.
 - Symmetric in-memory and explicit-margin render/save methods on `Figure`.
+- Independent physical figure size and raster DPI configuration, including
+  fluent inch- and pixel-based sizing.
+- Light and dark themes with configurable CJK-capable typography.
+- Point-based marker sizing, opacity, line caps, and line joins on
+  `SeriesStyle`.
+- CJK/emoji-aware deterministic text metrics, adaptive margins, dense tick
+  label selection, word-aware long-title fitting, and lowest-overlap automatic
+  legends.
+- Explicit Japanese, Simplified Chinese, Traditional Chinese, and Korean text
+  locales with language-correct fallback ordering and SVG language metadata.
+- Optional bounded Typst vector math for titles and axis labels through
+  `Text.typst_math(...)` and `TypstOptions`; ordinary text remains
+  subprocess-free.
 
 ### Changed
 
@@ -25,6 +38,14 @@ and uses semantic versioning.
 - Report complete advanced-series index ranges and empty-figure guidance.
 - Count empty area and rectangle series in figure bounds diagnostics, and let
   ownership-taking area/rectangle insertion retain legend labels.
+- Emit physical SVG dimensions with a stable DPI-independent logical view box,
+  and clip series through an identifier-free nested SVG viewport.
+- Increase automatic view padding so physical markers and strokes at extrema
+  remain visible.
+- No-argument rendering now uses the figure's stored physical size. Legacy
+  logical-coordinate rendering remains available when both width and height are
+  supplied; the former one-sided width/height default calls are no longer
+  supported.
 
 ## [0.1.0] - 2026-08-22
 

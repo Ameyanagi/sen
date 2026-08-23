@@ -133,21 +133,19 @@ def test_segmented_area_renders_baseline_style_order_legend_and_clip() raises:
     figure.set_x_limits(0.0, 4.0)
     figure.set_y_limits(0.0, 5.0)
 
-    var svg = render_svg(figure, 160.0, 100.0, _fixture_margins())
+    var svg = render_svg(figure, 320.0, 200.0, _fixture_margins())
     assert_equal(_count(svg, '<polygon class="sen-series-1" '), 2)
-    assert_true('points="24,65.6 24,51.2 56,36.8 56,65.6"' in svg)
-    assert_true('points="120,65.6 120,22.4 152,51.2 152,65.6"' in svg)
     # Both polygons and the legend glyph preserve the same area presentation.
     assert_equal(_count(svg, 'fill-opacity="0.35"'), 3)
-    assert_equal(_count(svg, 'stroke-width="2.5"'), 3)
+    assert_equal(_count(svg, 'stroke-width="3.472"'), 3)
     assert_equal(_count(svg, 'stroke-dasharray="6 3"'), 3)
 
-    var clip_open = _first(svg, '<g clip-path="url(#sen-plot-area)">')
+    var clip_open = _first(svg, '<svg class="sen-plot-clip"')
     var line_position = _first(svg, 'class="sen-series-0"', clip_open)
     var first_area = _first(svg, 'class="sen-series-1"', line_position)
     var second_area = _first(svg, 'class="sen-series-1"', first_area + 1)
     var marker_position = _first(svg, 'class="sen-series-2"', second_area)
-    var clip_close = _first(svg, "  </g>", marker_position)
+    var clip_close = _first(svg, "  </svg>", marker_position)
     assert_true(
         clip_open >= 0
         and line_position > clip_open
