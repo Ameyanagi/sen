@@ -721,6 +721,7 @@ def test_public_series_nominals_validate_both_discriminant_boundaries() raises:
     AxisKind.LINEAR.validate()
     AxisKind.LOG10.validate()
     LegendPosition.UPPER_RIGHT.validate()
+    LegendPosition.BEST.validate()
     LegendPosition.NONE.validate()
 
     with assert_raises(contains="missing policy is outside Sen's vocabulary"):
@@ -738,7 +739,7 @@ def test_public_series_nominals_validate_both_discriminant_boundaries() raises:
     with assert_raises(contains="legend position is outside Sen's vocabulary"):
         LegendPosition(_value=-1).validate()
     with assert_raises(contains="legend position is outside Sen's vocabulary"):
-        LegendPosition(_value=5).validate()
+        LegendPosition(_value=6).validate()
 
 
 def test_ingestion_rejects_invalid_nominals_before_fallback() raises:
@@ -766,7 +767,7 @@ def test_figure_validation_covers_axis_and_legend_nominals() raises:
         figure.validate()
 
     figure._y_scale = AxisKind.LINEAR
-    figure._legend_position = LegendPosition(_value=5)
+    figure._legend_position = LegendPosition(_value=6)
     with assert_raises(contains="legend position is outside Sen's vocabulary"):
         figure.validate()
 
@@ -847,7 +848,7 @@ def test_figure_text_setters_round_trip_any_string() raises:
 def test_figure_legend_and_grid_defaults_and_setters() raises:
     var figure = Figure()
 
-    assert_true(figure.legend_position() == LegendPosition.UPPER_RIGHT)
+    assert_true(figure.legend_position() == LegendPosition.BEST)
     assert_false(figure.grid_enabled())
 
     figure.set_legend(LegendPosition.LOWER_LEFT)

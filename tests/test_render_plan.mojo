@@ -3,6 +3,7 @@ from sen import (
     CommandKind,
     DrawCommand,
     Figure,
+    FigureConfig,
     LegendPosition,
     LineStyle,
     Margins,
@@ -35,6 +36,16 @@ def _valid_command(kind: CommandKind) raises -> DrawCommand:
     var palette_slot = -1
     var series_index = -1
     var line_width = 0.0
+    var font_size = 0.0
+    if (
+        kind == CommandKind.X_LABEL
+        or kind == CommandKind.Y_LABEL
+        or kind == CommandKind.TITLE
+        or kind == CommandKind.X_TITLE
+        or kind == CommandKind.Y_TITLE
+        or kind == CommandKind.LEGEND_TEXT
+    ):
+        font_size = 10.0
     if kind == CommandKind.SERIES:
         points.append(PlanPoint(1.0, 2.0))
         color = String("#123456")
@@ -77,6 +88,7 @@ def _valid_command(kind: CommandKind) raises -> DrawCommand:
         line_width,
         LineStyle.SOLID,
         MarkerStyle.NONE,
+        font_size=font_size,
     )
 
 
@@ -92,6 +104,25 @@ def test_public_lowering_is_valid_checked_and_deterministic() raises:
     assert_true(command.kind == CommandKind.BACKGROUND)
     with assert_raises(contains="render command index is out of bounds"):
         _ = first.command(first.command_count())
+
+
+def test_configured_plan_carries_physical_size_and_dpi_without_sentinels() raises:
+    var figure = _figure()
+    figure.set_config(FigureConfig(7.0, 5.0, dpi=300.0))
+
+    var configured = build_render_plan(figure)
+    assert_true(configured.figure_config)
+    var config = configured.figure_config.value()
+    assert_true(config.width() == 7.0)
+    assert_true(config.height() == 5.0)
+    assert_true(config.dpi() == 300.0)
+
+    var legacy = build_render_plan(figure, 700.0, 500.0)
+    assert_true(not legacy.figure_config)
+
+    configured.figure_config = FigureConfig(8.0, 5.0, dpi=300.0)
+    with assert_raises(contains="must match logical geometry"):
+        configured.validate()
 
 
 def _assert_extreme_finite_domain_lowers(maximum: Float64) raises:
@@ -391,7 +422,7 @@ def test_explicit_y_ticks_filter_labels_and_align_horizontal_grid() raises:
                 if (
                     grid.kind == CommandKind.GRID
                     and grid.y1 == grid.y2
-                    and grid.y1 == command.y1 - 3.0
+                    and abs(grid.y1 - (command.y1 - command.font_size * 0.32)) < 1.0e-12
                 ):
                     aligned = True
             assert_true(aligned)

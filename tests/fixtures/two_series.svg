@@ -1,35 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80">
-  <defs>
-    <clipPath id="sen-plot-area">
-      <rect x="24" y="8" width="88" height="52"/>
-    </clipPath>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="120" height="80" viewBox="0 0 120 80">
+  <title>Scientific plot</title>
+  <desc>Scientific plot rendered by Sen.</desc>
   <rect class="sen-background" x="0" y="0" width="120" height="80" fill="#ffffff"/>
-  <rect class="sen-frame" x="24" y="8" width="88" height="52" fill="none" stroke="#d0d0d0" stroke-width="1"/>
-  <line class="sen-axis" x1="24" y1="60" x2="112" y2="60" stroke="#222222" stroke-width="1"/>
-  <line class="sen-tick" x1="28" y1="60" x2="28" y2="64" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="28" y="74" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0</text>
-  <line class="sen-tick" x1="48" y1="60" x2="48" y2="64" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="48" y="74" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">0.5</text>
-  <line class="sen-tick" x1="68" y1="60" x2="68" y2="64" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="68" y="74" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1</text>
-  <line class="sen-tick" x1="88" y1="60" x2="88" y2="64" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="88" y="74" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">1.5</text>
-  <line class="sen-tick" x1="108" y1="60" x2="108" y2="64" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="108" y="74" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="middle">2</text>
-  <line class="sen-axis" x1="24" y1="8" x2="24" y2="60" stroke="#222222" stroke-width="1"/>
-  <line class="sen-tick" x1="20" y1="57.636" x2="24" y2="57.636" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="18" y="60.636" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0</text>
-  <line class="sen-tick" x1="20" y1="45.818" x2="24" y2="45.818" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="18" y="48.818" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">0.5</text>
-  <line class="sen-tick" x1="20" y1="34" x2="24" y2="34" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="18" y="37" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1</text>
-  <line class="sen-tick" x1="20" y1="22.182" x2="24" y2="22.182" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="18" y="25.182" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">1.5</text>
-  <line class="sen-tick" x1="20" y1="10.364" x2="24" y2="10.364" stroke="#222222" stroke-width="1"/>
-  <text class="sen-tick-label" x="18" y="13.364" fill="#222222" font-family="sans-serif" font-size="8" text-anchor="end">2</text>
-  <g clip-path="url(#sen-plot-area)">
-    <polyline class="sen-series-0" points="28,57.636 108,10.364" fill="none" stroke="#1f77b4" stroke-width="1.5"/>
-    <polyline class="sen-series-1" points="28,10.364 108,57.636" fill="none" stroke="#ff7f0e" stroke-width="1.5"/>
-  </g>
+  <rect class="sen-frame" x="36.792" y="8" width="71.708" height="38.583" fill="none" stroke="#7a8494" stroke-width="1"/>
+  <line class="sen-axis" x1="36.792" y1="46.583" x2="108.5" y2="46.583" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="41.737" y1="46.583" x2="41.737" y2="52.139" stroke="#202124" stroke-width="1"/>
+  <text class="sen-tick-label" x="41.737" y="67" fill="#202124" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;Noto Sans&quot;, &quot;Noto Sans CJK JP&quot;, &quot;Noto Sans JP&quot;, &quot;Noto Sans CJK SC&quot;, &quot;Noto Sans SC&quot;, &quot;Noto Sans CJK TC&quot;, &quot;Noto Sans TC&quot;, &quot;Noto Sans CJK KR&quot;, &quot;Noto Sans KR&quot;, &quot;Hiragino Sans&quot;, &quot;Yu Gothic&quot;, YuGothic, Meiryo, &quot;PingFang SC&quot;, &quot;PingFang TC&quot;, &quot;Microsoft YaHei&quot;, &quot;Microsoft JhengHei&quot;, &quot;Apple SD Gothic Neo&quot;, &quot;Malgun Gothic&quot;, NanumGothic, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Noto Color Emoji&quot;, sans-serif" font-size="12.5" text-anchor="middle">0</text>
+  <line class="sen-tick" x1="57.191" y1="46.583" x2="57.191" y2="52.139" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="72.646" y1="46.583" x2="72.646" y2="52.139" stroke="#202124" stroke-width="1"/>
+  <text class="sen-tick-label" x="72.646" y="67" fill="#202124" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;Noto Sans&quot;, &quot;Noto Sans CJK JP&quot;, &quot;Noto Sans JP&quot;, &quot;Noto Sans CJK SC&quot;, &quot;Noto Sans SC&quot;, &quot;Noto Sans CJK TC&quot;, &quot;Noto Sans TC&quot;, &quot;Noto Sans CJK KR&quot;, &quot;Noto Sans KR&quot;, &quot;Hiragino Sans&quot;, &quot;Yu Gothic&quot;, YuGothic, Meiryo, &quot;PingFang SC&quot;, &quot;PingFang TC&quot;, &quot;Microsoft YaHei&quot;, &quot;Microsoft JhengHei&quot;, &quot;Apple SD Gothic Neo&quot;, &quot;Malgun Gothic&quot;, NanumGothic, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Noto Color Emoji&quot;, sans-serif" font-size="12.5" text-anchor="middle">1</text>
+  <line class="sen-tick" x1="88.1" y1="46.583" x2="88.1" y2="52.139" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="103.555" y1="46.583" x2="103.555" y2="52.139" stroke="#202124" stroke-width="1"/>
+  <text class="sen-tick-label" x="103.555" y="67" fill="#202124" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;Noto Sans&quot;, &quot;Noto Sans CJK JP&quot;, &quot;Noto Sans JP&quot;, &quot;Noto Sans CJK SC&quot;, &quot;Noto Sans SC&quot;, &quot;Noto Sans CJK TC&quot;, &quot;Noto Sans TC&quot;, &quot;Noto Sans CJK KR&quot;, &quot;Noto Sans KR&quot;, &quot;Hiragino Sans&quot;, &quot;Yu Gothic&quot;, YuGothic, Meiryo, &quot;PingFang SC&quot;, &quot;PingFang TC&quot;, &quot;Microsoft YaHei&quot;, &quot;Microsoft JhengHei&quot;, &quot;Apple SD Gothic Neo&quot;, &quot;Malgun Gothic&quot;, NanumGothic, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Noto Color Emoji&quot;, sans-serif" font-size="12.5" text-anchor="middle">2</text>
+  <line class="sen-axis" x1="36.792" y1="8" x2="36.792" y2="46.583" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="31.236" y1="43.922" x2="36.792" y2="43.922" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="31.236" y1="35.607" x2="36.792" y2="35.607" stroke="#202124" stroke-width="1"/>
+  <text class="sen-tick-label" x="26.375" y="39.607" fill="#202124" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;Noto Sans&quot;, &quot;Noto Sans CJK JP&quot;, &quot;Noto Sans JP&quot;, &quot;Noto Sans CJK SC&quot;, &quot;Noto Sans SC&quot;, &quot;Noto Sans CJK TC&quot;, &quot;Noto Sans TC&quot;, &quot;Noto Sans CJK KR&quot;, &quot;Noto Sans KR&quot;, &quot;Hiragino Sans&quot;, &quot;Yu Gothic&quot;, YuGothic, Meiryo, &quot;PingFang SC&quot;, &quot;PingFang TC&quot;, &quot;Microsoft YaHei&quot;, &quot;Microsoft JhengHei&quot;, &quot;Apple SD Gothic Neo&quot;, &quot;Malgun Gothic&quot;, NanumGothic, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Noto Color Emoji&quot;, sans-serif" font-size="12.5" text-anchor="end">0.5</text>
+  <line class="sen-tick" x1="31.236" y1="27.292" x2="36.792" y2="27.292" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="31.236" y1="18.976" x2="36.792" y2="18.976" stroke="#202124" stroke-width="1"/>
+  <line class="sen-tick" x1="31.236" y1="10.661" x2="36.792" y2="10.661" stroke="#202124" stroke-width="1"/>
+  <text class="sen-tick-label" x="26.375" y="14.661" fill="#202124" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, &quot;Noto Sans&quot;, &quot;Noto Sans CJK JP&quot;, &quot;Noto Sans JP&quot;, &quot;Noto Sans CJK SC&quot;, &quot;Noto Sans SC&quot;, &quot;Noto Sans CJK TC&quot;, &quot;Noto Sans TC&quot;, &quot;Noto Sans CJK KR&quot;, &quot;Noto Sans KR&quot;, &quot;Hiragino Sans&quot;, &quot;Yu Gothic&quot;, YuGothic, Meiryo, &quot;PingFang SC&quot;, &quot;PingFang TC&quot;, &quot;Microsoft YaHei&quot;, &quot;Microsoft JhengHei&quot;, &quot;Apple SD Gothic Neo&quot;, &quot;Malgun Gothic&quot;, NanumGothic, &quot;Apple Color Emoji&quot;, &quot;Segoe UI Emoji&quot;, &quot;Noto Color Emoji&quot;, sans-serif" font-size="12.5" text-anchor="end">2</text>
+  <svg class="sen-plot-clip" x="36.792" y="8" width="71.708" height="38.583" viewBox="36.792 8 71.708 38.583" overflow="hidden">
+    <polyline class="sen-series-0" points="41.737,43.922 103.555,10.661" fill="none" stroke="#1f77b4" stroke-width="2.083" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline class="sen-series-1" points="41.737,10.661 103.555,43.922" fill="none" stroke="#ff7f0e" stroke-width="2.083" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
 </svg>
