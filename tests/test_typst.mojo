@@ -8,7 +8,10 @@ from sen import (
     encode_svg,
 )
 from sen.svg import _rewrite_typst_ids
-from sen.typst import _shell_quote
+from sen.typst import _shell_quote, _TypstCache
+from std.pathlib import Path
+from std.tempfile import TemporaryDirectory
+from std.subprocess import run
 from std.collections import List
 from std.testing import (
     TestSuite,
@@ -191,6 +194,96 @@ def test_xml_forbidden_controls_are_rejected_before_text_encoding() raises:
     var plot = _plot().with_title(String("bad\x01title"))
     with assert_raises(contains="scalar forbidden by XML 1.0"):
         _ = plot.render_svg()
+
+
+def test_cache_counts_compiles_and_invalidates_every_input() raises:
+    var temporary = TemporaryDirectory(prefix="sen-counting-typst-")
+    var executable = temporary.name + "/compiler.sh"
+    var count = temporary.name + "/count"
+    Path(executable).write_text(
+        "#!/bin/sh\nprintf x >>"
+        + _shell_quote(count)
+        + "\nexec "
+        + _shell_quote(FAKE_TYPST)
+        + ' "$@"\n'
+    )
+    _ = run("chmod +x " + _shell_quote(executable))
+    var options = TypstOptions(executable=executable)
+    var cache = _TypstCache()
+    var original = cache.compile("$ x $", 10.0, "#000000", 100.0, 20.0, options)
+    assert_equal(
+        cache.compile("$ x $", 10.0, "#000000", 100.0, 20.0, options), original
+    )
+    assert_equal(Path(count).read_text().byte_length(), 1)
+    _ = cache.compile("$ y $", 10.0, "#000000", 100.0, 20.0, options)
+    _ = cache.compile("$ x $", 11.0, "#000000", 100.0, 20.0, options)
+    _ = cache.compile("$ x $", 10.0, "#123456", 100.0, 20.0, options)
+    _ = cache.compile("$ x $", 10.0, "#000000", 101.0, 20.0, options)
+    _ = cache.compile("$ x $", 10.0, "#000000", 100.0, 21.0, options)
+    _ = cache.compile(
+        "$ x $",
+        10.0,
+        "#000000",
+        100.0,
+        20.0,
+        TypstOptions(executable=executable, timeout_seconds=9),
+    )
+    var second_executable = temporary.name + "/compiler-two.sh"
+    Path(second_executable).write_text(Path(executable).read_text())
+    _ = run("chmod +x " + _shell_quote(second_executable))
+    _ = cache.compile(
+        "$ x $",
+        10.0,
+        "#000000",
+        100.0,
+        20.0,
+        TypstOptions(executable=second_executable),
+    )
+    assert_equal(Path(count).read_text().byte_length(), 8)
+    with assert_raises(contains="Typst source exceeds"):
+        _ = cache.compile(
+            "$ x $",
+            10.0,
+            "#000000",
+            100.0,
+            20.0,
+            TypstOptions(executable=executable, max_source_bytes=1),
+        )
+    with assert_raises(contains="Typst SVG exceeds"):
+        _ = cache.compile(
+            "$ x $",
+            10.0,
+            "#000000",
+            100.0,
+            20.0,
+            TypstOptions(executable=executable, max_output_bytes=1),
+        )
+
+
+def test_render_cache_is_local_and_repeated_placements_compile_once() raises:
+    var temporary = TemporaryDirectory(prefix="sen-render-cache-")
+    var executable = temporary.name + "/compiler.sh"
+    var count = temporary.name + "/count"
+    Path(executable).write_text(
+        "#!/bin/sh\nprintf x >>"
+        + _shell_quote(count)
+        + "\nexec "
+        + _shell_quote(FAKE_TYPST)
+        + ' "$@"\n'
+    )
+    _ = run("chmod +x " + _shell_quote(executable))
+    var plan = _plot().with_title(Text.typst_math("$ x $")).build_render_plan()
+    var title_index = -1
+    for index in range(plan.command_count()):
+        if plan.commands[index].kind == CommandKind.TITLE:
+            title_index = index
+    for _ in range(20):
+        plan.commands.append(plan.commands[title_index].copy())
+    var options = TypstOptions(executable=executable)
+    var first = encode_svg(plan, options)
+    assert_equal(Path(count).read_text().byte_length(), 1)
+    assert_equal(encode_svg(plan, options), first)
+    assert_equal(Path(count).read_text().byte_length(), 2)
 
 
 def main() raises:

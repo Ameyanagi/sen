@@ -9,7 +9,7 @@ from .render_plan import CommandKind, DrawCommand, RenderPlan
 from .series import Figure
 from .style import LineCap, LineJoin, LineStyle, MarkerStyle, _palette_color
 from .text import TextKind
-from .typst import TypstOptions, _compile_typst_svg
+from .typst import TypstOptions, _TypstCache
 
 
 def _decimal_factor(precision: Int) raises -> Int:
@@ -366,6 +366,7 @@ def _append_typst_text(
     plan: RenderPlan,
     foreground: StringSlice,
     options: TypstOptions,
+    mut cache: _TypstCache,
 ) raises:
     """Compile and nest one fixed-size Typst fragment at a text command."""
     # Typst source is also exposed as accessibility metadata by callers and must
@@ -376,7 +377,7 @@ def _append_typst_text(
         box_width = plan.plot_height
     var box_height = command.font_size * 2.4
     var points_per_logical = 72.0 / 100.0
-    var compiled = _compile_typst_svg(
+    var compiled = cache.compile(
         command.text,
         command.font_size * points_per_logical,
         foreground,
@@ -827,6 +828,7 @@ def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
     var legend_background = plan.theme.legend_background()
     var typography = plan.theme.typography()
     var family = typography.family()
+    var cache = _TypstCache()
     var series_group_open = False
     for index in range(len(plan.commands)):
         ref command = plan.commands[index]
@@ -890,7 +892,9 @@ def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
             or command.kind._value == CommandKind.LEGEND_TEXT._value
         ):
             if command.text_kind == TextKind.TYPST_MATH:
-                _append_typst_text(svg, command, index, plan, foreground, options)
+                _append_typst_text(
+                    svg, command, index, plan, foreground, options, cache
+                )
             else:
                 _append_text(svg, command, family, foreground)
         elif command.kind._value == CommandKind.SERIES._value:

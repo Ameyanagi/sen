@@ -1,5 +1,6 @@
 """Bounded optional Typst compilation for mathematical SVG text."""
 
+from std.collections import List
 from std.math import isfinite
 from std.pathlib import Path
 from std.subprocess import run
@@ -277,3 +278,89 @@ def _compile_typst_svg(
     if failure.byte_length() > 0:
         raise Error(failure)
     return result^
+
+
+struct _TypstCacheEntry(Copyable):
+    var source: String
+    var font_size: Float64
+    var foreground: String
+    var width: Float64
+    var height: Float64
+    var options: TypstOptions
+    var svg: String
+
+    def __init__(
+        out self,
+        source: StringSlice,
+        font_size: Float64,
+        foreground: StringSlice,
+        width: Float64,
+        height: Float64,
+        options: TypstOptions,
+        var svg: String,
+    ):
+        self.source = String(source)
+        self.font_size = font_size
+        self.foreground = String(foreground)
+        self.width = width
+        self.height = height
+        self.options = options.copy()
+        self.svg = svg^
+
+
+struct _TypstCache:
+    """One render's bounded cache of raw, unnamespaced compiler output.
+
+    All compiler inputs and options participate in equality. Retained input/output string bytes
+    are capped at 8 MiB and entries at 64; oversized fragments compile normally
+    without retention. A full cache clears before admitting the next fragment.
+    Placement IDs are rewritten only after lookup, never stored in this cache.
+    """
+
+    var _entries: List[_TypstCacheEntry]
+    var _bytes: Int
+
+    def __init__(out self):
+        self._entries = List[_TypstCacheEntry]()
+        self._bytes = 0
+
+    def compile(
+        mut self,
+        source: StringSlice,
+        font_size: Float64,
+        foreground: StringSlice,
+        width: Float64,
+        height: Float64,
+        options: TypstOptions,
+    ) raises -> String:
+        for entry in self._entries:
+            if (
+                entry.source == source
+                and entry.font_size == font_size
+                and entry.foreground == foreground
+                and entry.width == width
+                and entry.height == height
+                and entry.options == options
+            ):
+                return entry.svg.copy()
+        var svg = _compile_typst_svg(
+            source, font_size, foreground, width, height, options
+        )
+        var byte_count = (
+            svg.byte_length()
+            + source.byte_length()
+            + foreground.byte_length()
+            + options._executable.byte_length()
+            + options._id_prefix.byte_length()
+        )
+        if byte_count <= 8_388_608:
+            if len(self._entries) >= 64 or self._bytes + byte_count > 8_388_608:
+                self._entries.clear()
+                self._bytes = 0
+            self._entries.append(
+                _TypstCacheEntry(
+                    source, font_size, foreground, width, height, options, svg.copy()
+                )
+            )
+            self._bytes += byte_count
+        return svg^

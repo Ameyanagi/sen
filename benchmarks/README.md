@@ -27,3 +27,19 @@ xcrun xctrace record --template 'Time Profiler' \
 The benchmark writes only `/tmp/sen-svg-profile.svg`. Results are development
 evidence, not permanent marketing claims. Record CPU, OS, Mojo version, compiler
 options, warmup, sample count, statistic, and exact command when quoting them.
+
+
+## Render-local Typst cache
+
+Run `pixi run --locked mojo run -I src benchmarks/bench_typst_cache.mojo`.
+The fixture creates 50 identical math title commands and compares 50 calls to
+the unchanged bounded compiler boundary against one complete cached SVG render.
+The counting tests independently assert one subprocess per distinct input and
+one fresh subprocess in the next render. The fake compiler writes deterministic
+SVG immediately, isolating process overhead; actual Typst compilation savings
+will depend on the input and host.
+
+2026-09-05, Apple M4 / macOS ARM64, pinned Mojo 1.0.0, optimized `mojo run`: 50 uncached
+calls took **1837.494 ms**; full cached encoding took **35.239 ms** and emitted
+22,150 bytes (about 52x less wall time for this synthetic workload). No timeout,
+source/output limit, or failure propagation gate was removed.
