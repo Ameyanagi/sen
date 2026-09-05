@@ -7,6 +7,12 @@ and uses semantic versioning.
 
 ### Added
 
+- Explicit text-metrics providers and an optional published-Kumihan adapter for
+  measured titles, tick collision selection, and legends.
+- Author-written accessible descriptions on Plot, Figure, and RenderPlan.
+- Render-scoped bounded Typst fragment reuse with placement-specific SVG IDs.
+- Three-platform isolated consumer checks against the published 0.1.0 README.
+
 - Consuming `Plot.with_*` methods for fluent, ownership-preserving construction
   across every existing plot overload and configuration call, while retaining
   all mutable mutators.
@@ -32,6 +38,10 @@ and uses semantic versioning.
   subprocess-free.
 
 ### Changed
+
+- Keep the README consumer quickstart compatible with immutable 0.1.0; document
+  unreleased fluent/theme/font APIs separately. Workspace and recipe remain at
+  0.1.0 until a coordinated new release; existing package bytes are untouched.
 
 - Validate public nominal discriminators at explicit checkpoints and reject
   configuration fallthrough at render time without rescanning point data.

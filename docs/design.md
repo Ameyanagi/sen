@@ -157,3 +157,18 @@ never be edited independently of the renderer.
 ## Out of scope
 
 Signal processing, interpolation, optimization, dataframes, native windowing, and a bundled low-level renderer are outside the core plotting package.
+
+
+### Font metrics, descriptions, and optional compilation
+
+Layout accepts an explicit `TextMetrics` provider at the prepared-plan boundary.
+Default fallback metrics remain deterministic and dependency-free. Providers
+validate the selected font family/weight, measure complete runs, and supply
+line boxes plus explicit baseline extents; additive providers retain linear prefix measurements.
+The optional `sen_kumihan` source module reads installed, pinned Kumihan APIs;
+it never imports sibling source trees or performs host font discovery.
+
+Author-written accessible descriptions survive Plot/Figure/RenderPlan lowering.
+SVG validates and escapes their XML scalars without inventing conclusions.
+Typst reuse is local to one encoding, keyed by all compiler inputs and options,
+bounded in entry count and bytes, and precedes placement-specific ID rewriting.

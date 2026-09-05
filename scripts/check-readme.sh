@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+readme_mode=source
+if [[ "${1:-}" == --installed ]]; then
+  readme_mode=installed
+  shift
+fi
+readme_source=${1:-README.md}
+readme_import_args=()
+if [[ "$readme_mode" == source ]]; then
+  readme_import_args=(-I "$PWD/src")
+fi
+
 readme_compile_dir=$(mktemp -d "${TMPDIR:-/tmp}/sen-readme.XXXXXX")
 cleanup() {
   if [[ -n "${readme_compile_dir:-}" && -d "$readme_compile_dir" ]]; then
@@ -49,7 +60,7 @@ awk -v output_dir="$readme_compile_dir" '
       exit 1
     }
   }
-' README.md
+' "$readme_source"
 
 shopt -s nullglob
 readme_blocks=("$readme_compile_dir"/*.mojo)
@@ -60,9 +71,12 @@ fi
 
 for block_file in "${readme_blocks[@]}"; do
   block_name=$(basename "${block_file%.mojo}")
-  if ! mojo build -I src "$block_file" -o "$readme_compile_dir/$block_name"; then
+  if ! (cd "$readme_compile_dir" && mojo build ${readme_import_args[@]+"${readme_import_args[@]}"} "$block_file" -o "$readme_compile_dir/$block_name"); then
     printf 'README Mojo block %d failed to compile.\n' "$((10#$block_name))" >&2
     exit 1
+  fi
+  if [[ "$readme_mode" == installed ]]; then
+    (cd "$readme_compile_dir" && "./$block_name")
   fi
 done
 

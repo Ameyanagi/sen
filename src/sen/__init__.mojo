@@ -32,3 +32,5 @@ from .svg import encode_svg, render_svg, save_svg, write_svg
 from .text import Text, TextKind
 from .theme import TextLocale, Theme, Typography
 from .typst import TypstOptions
+
+from .text_metrics import TextMetrics, FallbackTextMetrics

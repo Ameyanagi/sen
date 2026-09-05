@@ -6,6 +6,7 @@ intended to replace font shaping or measurement by an output backend.
 """
 
 from std.math import isfinite
+from std.collections import Optional
 
 
 def _validate_font_size(font_size: Float64) raises:
@@ -529,3 +530,96 @@ def text_height(font_size: Float64) raises -> Float64:
     """Return a deterministic 1.2-em fallback line-box height."""
     _validate_font_size(font_size)
     return font_size * 1.2
+
+
+trait TextMetrics:
+    """Explicit synchronous text measurement contract in SVG logical units.
+
+    A provider owns or borrows known font data. It must reject unsupported font
+    families, return finite nonnegative full-run widths, and positive line-box
+    heights. Width must include shaping/kerning; layout never starts a process.
+    Measurements scale linearly with font size. The SVG consumer must load the
+    same font, language, and shaping configuration used by the provider.
+    """
+
+    def font_weight(self) -> Optional[Int]:
+        """Select the measured face's CSS weight, or None for fallback layout."""
+        return Optional[Int](400)
+
+    def ascent(self, font_size: Float64) raises -> Float64:
+        """Return the maximum extent above the baseline in logical units."""
+        return self.height(font_size) * 0.8
+
+    def descent(self, font_size: Float64) raises -> Float64:
+        """Return the nonnegative extent below the baseline in logical units."""
+        return self.height(font_size) * 0.2
+
+    def additive_graphemes(self) -> Bool:
+        """Opt into linear prefix sums only when grapheme widths are additive."""
+        return False
+
+    def nominal_glyphs(self) -> Bool:
+        """Whether the encoder must disable kerning and optional ligatures."""
+        return False
+
+    def validate_family(self, family: StringSlice) raises:
+        ...
+
+    def width(self, text: StringSlice, font_size: Float64) raises -> Float64:
+        ...
+
+    def height(self, font_size: Float64) raises -> Float64:
+        ...
+
+
+struct FallbackTextMetrics(TextMetrics):
+    """Deterministic font-independent estimates; no font I/O or dependency."""
+
+    def __init__(out self):
+        pass
+
+    def font_weight(self) -> Optional[Int]:
+        """Absence preserves the fallback role hierarchy and estimated anchors."""
+        return None
+
+    def additive_graphemes(self) -> Bool:
+        return True
+
+    def validate_family(self, family: StringSlice) raises:
+        pass
+
+    def width(self, text: StringSlice, font_size: Float64) raises -> Float64:
+        return text_width(text, font_size)
+
+    def height(self, font_size: Float64) raises -> Float64:
+        return text_height(font_size)
+
+
+def _measure_text[
+    M: TextMetrics
+](metrics: M, text: StringSlice, font_size: Float64) raises -> Float64:
+    var width = metrics.width(text, font_size)
+    if not isfinite(width) or width < 0.0:
+        raise Error("text metrics width must be finite and nonnegative; got ", width)
+    return width
+
+
+def _measure_height[M: TextMetrics](metrics: M, font_size: Float64) raises -> Float64:
+    var height = metrics.height(font_size)
+    if not isfinite(height) or height <= 0.0:
+        raise Error("text metrics height must be finite and positive; got ", height)
+    return height
+
+
+def _measure_ascent[M: TextMetrics](metrics: M, font_size: Float64) raises -> Float64:
+    var extent = metrics.ascent(font_size)
+    if not isfinite(extent) or extent < 0.0:
+        raise Error("text metrics ascent must be finite and nonnegative; got ", extent)
+    return extent
+
+
+def _measure_descent[M: TextMetrics](metrics: M, font_size: Float64) raises -> Float64:
+    var extent = metrics.descent(font_size)
+    if not isfinite(extent) or extent < 0.0:
+        raise Error("text metrics descent must be finite and nonnegative; got ", extent)
+    return extent
