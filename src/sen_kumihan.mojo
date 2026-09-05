@@ -36,7 +36,7 @@ struct KumihanTextMetrics(TextMetrics):
         self._family = String(family)
 
     def font_weight(self) -> Optional[Int]:
-        return self._font_weight
+        return Optional[Int](self._font_weight)
 
     def _scale(self, font_size: Float64) raises -> Float64:
         if not isfinite(font_size) or font_size <= 0.0:

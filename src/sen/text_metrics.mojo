@@ -544,7 +544,7 @@ trait TextMetrics:
 
     def font_weight(self) -> Optional[Int]:
         """Select the measured face's CSS weight, or None for fallback layout."""
-        return 400
+        return Optional[Int](400)
 
     def ascent(self, font_size: Float64) raises -> Float64:
         """Return the maximum extent above the baseline in logical units."""
