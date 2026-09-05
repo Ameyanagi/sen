@@ -12,6 +12,7 @@ build:
   number: 0
   script:
     - mojo precompile src/sen -o ${{ PREFIX }}/lib/mojo/sen.mojoc
+    - cp src/sen_kumihan.mojo ${{ PREFIX }}/lib/mojo/sen_kumihan.mojo
 
 requirements:
   build:

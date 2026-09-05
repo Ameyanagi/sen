@@ -39,6 +39,8 @@ jobs:
           -- bash scripts/check-readme.sh --installed
       - name: Verify locked workspace
         run: pixi run --locked check
+      - name: Verify pinned optional font adapter
+        run: pixi run --locked -e fonts fonts-check
 
   package:
     name: Package Linux x86-64
@@ -62,3 +64,5 @@ jobs:
         run: |
           pixi run --locked package
           bash scripts/check-package-metadata.sh
+      - name: Verify packaged adapter with installed dependencies
+        run: bash scripts/check-font-package.sh

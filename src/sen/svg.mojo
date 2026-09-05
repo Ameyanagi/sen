@@ -1,6 +1,7 @@
 """Deterministic SVG rendering for scientific figures."""
 
 from std.math import floor, isfinite
+from std.collections import Optional
 from std.os import makedirs
 
 from .layout import Margins
@@ -315,6 +316,7 @@ def _append_text(
     command: DrawCommand,
     family: StringSlice,
     foreground: StringSlice,
+    font_weight: Optional[Int],
 ) raises:
     svg += '  <text class="'
     svg += _semantic_class(command)
@@ -336,7 +338,12 @@ def _append_text(
     svg += '" font-size="'
     _append_svg_number(svg, command.font_size)
     svg += '"'
-    if command.kind._value == CommandKind.TITLE._value:
+    if font_weight:
+        svg += ' xml:space="preserve" style="white-space:pre"'
+        svg += ' font-weight="'
+        svg.write(font_weight.value())
+        svg += '"'
+    elif command.kind._value == CommandKind.TITLE._value:
         svg += ' font-weight="600"'
     elif (
         command.kind._value == CommandKind.X_TITLE._value
@@ -784,6 +791,11 @@ def _append_marker(mut svg: String, command: DrawCommand) raises:
 def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
     """Encode commands with fixed per-element attribute ordering."""
     var svg = String('<svg xmlns="http://www.w3.org/2000/svg" role="img"')
+    if plan.nominal_glyphs:
+        svg += ' style="font-kerning:none;font-variant-ligatures:none;'
+        svg += "font-optical-sizing:none;font-feature-settings:'locl' 0,'ccmp' 0,"
+        svg += "'rlig' 0,'rclt' 0,'calt' 0,'liga' 0,'clig' 0,'kern' 0,"
+        svg += "'mark' 0,'mkmk' 0,'dist' 0\""
     var language_tag = plan.theme.typography().locale().language_tag()
     if language_tag.byte_length() > 0:
         svg += ' lang="'
@@ -821,8 +833,8 @@ def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
     svg += _escape_xml(accessible_title)
     svg += "</title>\n"
     svg += "  <desc>"
-    if plan.accessible_description.byte_length() > 0:
-        svg += _escape_xml(plan.accessible_description)
+    if plan.accessible_description:
+        svg += _escape_xml(plan.accessible_description.value())
     else:
         svg += "Scientific plot rendered by Sen."
     svg += "</desc>\n"
@@ -901,7 +913,7 @@ def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
                     svg, command, index, plan, foreground, options, cache
                 )
             else:
-                _append_text(svg, command, family, foreground)
+                _append_text(svg, command, family, foreground, plan.text_font_weight)
         elif command.kind._value == CommandKind.SERIES._value:
             _append_polyline(svg, command)
         elif command.kind._value == CommandKind.AREA._value:

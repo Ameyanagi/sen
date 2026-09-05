@@ -262,7 +262,8 @@ Use `plot.description(text)` or consuming `with_description(text)` to explain
 axes, series, or an author-approved takeaway. Sen never infers a scientific
 conclusion. `Figure.set_accessible_description` and
 `RenderPlan.accessible_description` expose the same optional plain-text
-metadata; the empty string restores the generic default. XML escaping and
+metadata as `Optional[String]`; absence selects the generic default. The Plot
+and Figure string setters accept an empty string to clear the override. XML escaping and
 forbidden-scalar validation match other SVG text.
 
 ```mojo
@@ -291,7 +292,10 @@ example used by that inspection.
 ## Measured fonts
 
 `TextMetrics` is a small synchronous contract: `validate_family`, complete-run
-`width(text, font_size)`, and `height(font_size)` in SVG logical units. All
+`width(text, font_size)`, and `height(font_size)` in SVG logical units.
+Providers can override `ascent`/`descent` (defaults: 80%/20% of height) for actual
+baseline extents. `font_weight()` selects the measured face for every text role
+(default `Optional[Int](400)`; `None` preserves the legacy fallback hierarchy). All
 measurements must be finite; widths are nonnegative and line-box heights are
 positive. Measurements must scale linearly with font size. Errors propagate
 before a plan is returned. The caller must load the same font and shaping

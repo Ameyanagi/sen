@@ -23,7 +23,14 @@ from .style import (
     _palette_color,
 )
 from .text import TextKind
-from .text_metrics import text_height, text_width
+from .text_metrics import (
+    TextMetrics,
+    FallbackTextMetrics,
+    _measure_text,
+    _measure_height,
+    _measure_ascent,
+    _measure_descent,
+)
 
 
 def _points_to_logical(points: Float64) -> Float64:
@@ -404,49 +411,55 @@ def _tick_step(ticks: List[Float64], domain_span: Float64) -> Float64:
     return abs(domain_span)
 
 
-def _maximum_text_width(labels: List[String], font_size: Float64) raises -> Float64:
+def _maximum_text_width[
+    M: TextMetrics
+](metrics: M, labels: List[String], font_size: Float64) raises -> Float64:
     var maximum = 0.0
     for index in range(len(labels)):
-        maximum = max(maximum, text_width(labels[index], font_size))
+        maximum = max(maximum, _measure_text(metrics, labels[index], font_size))
     return maximum
 
 
-def _role_text_height(font_size: Float64, kind: TextKind) raises -> Float64:
+def _role_text_height[
+    M: TextMetrics
+](metrics: M, font_size: Float64, kind: TextKind) raises -> Float64:
     """Return the bounded fallback line box reserved by semantic text roles."""
     if kind == TextKind.TYPST_MATH:
         # Typst integrals and scripts routinely exceed a plain 1.2-em line box.
         # Keep this in sync with the fixed fragment viewport in svg.mojo.
         return font_size * 2.4
-    return text_height(font_size)
+    return _measure_height(metrics, font_size)
 
 
-def _ellipsize_text(
-    text: StringSlice, font_size: Float64, available_width: Float64
+def _ellipsize_text[
+    M: TextMetrics
+](
+    metrics: M, text: StringSlice, font_size: Float64, available_width: Float64
 ) raises -> String:
-    """Fit one grapheme-safe line, adding one deterministic ellipsis if needed."""
-    var ellipsis = String("…")
-    var ellipsis_width = text_width(ellipsis, font_size)
-    if ellipsis_width > available_width:
-        return String()
-    var graphemes = List[String]()
-    var widths = List[Float64]()
-    var full_width = 0.0
-    for grapheme in text.graphemes():
-        var stored = String(grapheme)
-        var width = text_width(stored, font_size)
-        graphemes.append(stored^)
-        widths.append(width)
-        full_width += width
-    if full_width <= available_width:
+    """Fit complete shaped runs, retaining grapheme boundaries and kerning."""
+    if _measure_text(metrics, text, font_size) <= available_width:
         return String(text)
+    var ellipsis = String("…")
+    var used_width = _measure_text(metrics, ellipsis, font_size)
+    var has_fit = used_width <= available_width
+    if not has_fit and metrics.additive_graphemes():
+        return String()
     var result = String()
-    var used_width = 0.0
-    for index in range(len(graphemes)):
-        if used_width + widths[index] + ellipsis_width > available_width:
-            break
-        result += graphemes[index]
-        used_width += widths[index]
-    result += ellipsis
+    var prefix = String()
+    for grapheme in text.graphemes():
+        if metrics.additive_graphemes():
+            var width = _measure_text(metrics, grapheme, font_size)
+            if used_width + width > available_width:
+                break
+            used_width += width
+            result += grapheme
+        else:
+            prefix += grapheme
+            if _measure_text(metrics, prefix + ellipsis, font_size) <= available_width:
+                result = prefix.copy()
+                has_fit = True
+    if has_fit:
+        result += ellipsis
     return result^
 
 
@@ -477,32 +490,59 @@ struct _TitleLayout:
         return 0
 
 
-def _plain_title_layout(
+def _plain_title_layout[
+    M: TextMetrics
+](
+    metrics: M,
     title: StringSlice,
     available_width: Float64,
     preferred_font_size: Float64,
     minimum_font_size: Float64,
 ) raises -> _TitleLayout:
     """Wrap a plain title into two readable lines, then ellipsize at 11 pt."""
-    var graphemes = List[String]()
-    var prefix_widths = List[Float64]()
-    prefix_widths.append(0.0)
-    for grapheme in title.graphemes():
-        var stored = String(grapheme)
-        var width = text_width(stored, preferred_font_size)
-        graphemes.append(stored^)
-        prefix_widths.append(prefix_widths[len(prefix_widths) - 1] + width)
-    if prefix_widths[len(prefix_widths) - 1] <= available_width:
+    if _measure_text(metrics, title, preferred_font_size) <= available_width:
         return _TitleLayout(String(title), String(), preferred_font_size)
+    var graphemes = List[String]()
+    for grapheme in title.graphemes():
+        graphemes.append(String(grapheme))
+    var prefix_widths = List[Float64]()
+    var suffix_widths = List[Float64]()
+    if metrics.additive_graphemes():
+        prefix_widths.append(0.0)
+        for grapheme in graphemes:
+            prefix_widths.append(
+                prefix_widths[len(prefix_widths) - 1]
+                + _measure_text(metrics, grapheme, preferred_font_size)
+            )
+        for boundary in range(len(graphemes) + 1):
+            suffix_widths.append(
+                prefix_widths[len(graphemes)] - prefix_widths[boundary]
+            )
+    else:
+        for boundary in range(len(graphemes) + 1):
+            prefix_widths.append(
+                _measure_text(
+                    metrics,
+                    _join_graphemes(graphemes, 0, boundary),
+                    preferred_font_size,
+                )
+            )
+            suffix_widths.append(
+                _measure_text(
+                    metrics,
+                    _join_graphemes(graphemes, boundary, len(graphemes)),
+                    preferred_font_size,
+                )
+            )
     if len(graphemes) < 2:
         return _TitleLayout(
-            _ellipsize_text(title, minimum_font_size, available_width),
+            _ellipsize_text(metrics, title, minimum_font_size, available_width),
             String(),
             minimum_font_size,
         )
 
     # Prefer a boundary between words. A whitespace run is visited exactly once,
-    # while prefix sums make every candidate measurement constant time.
+    # using independently shaped prefix/suffix runs at each candidate boundary.
     var best_first_end = 1
     var best_second_start = 1
     var best_extent = Float64.MAX_FINITE
@@ -519,7 +559,7 @@ def _plain_title_layout(
             continue
         var extent = max(
             prefix_widths[first_end],
-            prefix_widths[len(graphemes)] - prefix_widths[index],
+            suffix_widths[index],
         )
         if extent < best_extent:
             found_word_break = True
@@ -530,7 +570,7 @@ def _plain_title_layout(
         for split in range(1, len(graphemes)):
             var extent = max(
                 prefix_widths[split],
-                prefix_widths[len(graphemes)] - prefix_widths[split],
+                suffix_widths[split],
             )
             if extent < best_extent:
                 best_extent = extent
@@ -552,7 +592,9 @@ def _plain_title_layout(
     var maximum_end = 0
     for candidate_end in range(1, len(graphemes) + 1):
         if prefix_widths[candidate_end] > preferred_width_limit:
-            break
+            if metrics.additive_graphemes():
+                break
+            continue
         maximum_end = candidate_end
     best_first_end = maximum_end
     best_second_start = maximum_end
@@ -569,11 +611,15 @@ def _plain_title_layout(
             best_second_start = index
     first = _join_graphemes(graphemes, 0, best_first_end)
     second = _join_graphemes(graphemes, best_second_start, len(graphemes))
-    second = _ellipsize_text(second, minimum_font_size, available_width)
+    first = _ellipsize_text(metrics, first, minimum_font_size, available_width)
+    second = _ellipsize_text(metrics, second, minimum_font_size, available_width)
     return _TitleLayout(first^, second^, minimum_font_size)
 
 
-def _x_tick_label_visibility(
+def _x_tick_label_visibility[
+    M: TextMetrics
+](
+    metrics: M,
     ticks: List[Float64],
     labels: List[String],
     mapper: _AxisMapper,
@@ -587,16 +633,18 @@ def _x_tick_label_visibility(
     if len(ticks) == 0:
         return visible^
     visible[0] = True
-    var previous_right = mapper.map(ticks[0]) + text_width(labels[0], font_size) / 2.0
+    var previous_right = (
+        mapper.map(ticks[0]) + _measure_text(metrics, labels[0], font_size) / 2.0
+    )
     var last_left = Float64.MAX_FINITE
     if len(ticks) > 1:
         last_left = (
             mapper.map(ticks[len(ticks) - 1])
-            - text_width(labels[len(labels) - 1], font_size) / 2.0
+            - _measure_text(metrics, labels[len(labels) - 1], font_size) / 2.0
         )
     for index in range(1, len(ticks)):
         var center = mapper.map(ticks[index])
-        var half_width = text_width(labels[index], font_size) / 2.0
+        var half_width = _measure_text(metrics, labels[index], font_size) / 2.0
         var left = center - half_width
         var right = center + half_width
         if left < previous_right + gap:
@@ -1174,8 +1222,10 @@ def _expand_automatic_domains_for_geometry(
     return (expanded_x, expanded_y)
 
 
-def build_render_plan(
-    figure: Figure, width: Float64, height: Float64, margins: Margins
+def _build_render_plan[
+    M: TextMetrics
+](
+    figure: Figure, width: Float64, height: Float64, margins: Margins, metrics: M
 ) raises -> RenderPlan:
     """Lower ``figure`` to a validated backend-neutral device-space plan.
 
@@ -1190,6 +1240,14 @@ def build_render_plan(
     figure._validate_render_configuration()
     var theme = figure.theme()
     var typography = theme.typography()
+    metrics.validate_family(typography.family())
+    var font_weight = metrics.font_weight()
+    var measured_face = False
+    if font_weight:
+        measured_face = True
+        var weight = font_weight.value()
+        if weight < 1 or weight > 1000:
+            raise Error("text metrics font weight must be within 1..1000; got ", weight)
     var title_font_size = _points_to_logical(typography.title_size())
     var axis_font_size = _points_to_logical(typography.axis_size())
     var tick_font_size = _points_to_logical(typography.tick_size())
@@ -1360,11 +1418,24 @@ def build_render_plan(
     var edge_buffer = 8.0
     var tick_length = _points_to_logical(4.0)
     var tick_padding = _points_to_logical(3.5)
-    var tick_label_height = text_height(tick_font_size)
-    var x_axis_label_height = _role_text_height(axis_font_size, figure.x_label_kind())
-    var y_axis_label_height = _role_text_height(axis_font_size, figure.y_label_kind())
+    var tick_label_height = _measure_height(metrics, tick_font_size)
+    var tick_ascent = _measure_ascent(metrics, tick_font_size)
+    var tick_descent = _measure_descent(metrics, tick_font_size)
+    var axis_ascent = _measure_ascent(metrics, axis_font_size)
+    var axis_descent = _measure_descent(metrics, axis_font_size)
+    if measured_face:
+        tick_label_height = max(tick_label_height, tick_ascent + tick_descent)
+    var x_axis_label_height = _role_text_height(
+        metrics, axis_font_size, figure.x_label_kind()
+    )
+    var y_axis_label_height = _role_text_height(
+        metrics, axis_font_size, figure.y_label_kind()
+    )
+    if measured_face:
+        x_axis_label_height = max(x_axis_label_height, axis_ascent + axis_descent)
+        y_axis_label_height = max(y_axis_label_height, axis_ascent + axis_descent)
     var measured_left = edge_buffer + tick_length + tick_padding
-    measured_left += _maximum_text_width(y_tick_labels, tick_font_size)
+    measured_left += _maximum_text_width(metrics, y_tick_labels, tick_font_size)
     if y_label.byte_length() > 0:
         measured_left += y_axis_label_height + _points_to_logical(4.0)
     var measured_bottom = edge_buffer + tick_length + tick_padding
@@ -1375,12 +1446,16 @@ def build_render_plan(
     if len(x_tick_labels) > 0:
         measured_left = max(
             measured_left,
-            edge_buffer + text_width(x_tick_labels[0], tick_font_size) / 2.0,
+            edge_buffer
+            + _measure_text(metrics, x_tick_labels[0], tick_font_size) / 2.0,
         )
         measured_right = max(
             measured_right,
             edge_buffer
-            + text_width(x_tick_labels[len(x_tick_labels) - 1], tick_font_size) / 2.0,
+            + _measure_text(
+                metrics, x_tick_labels[len(x_tick_labels) - 1], tick_font_size
+            )
+            / 2.0,
         )
     var effective_left = max(margins.left(), measured_left)
     var effective_right = max(margins.right(), measured_right)
@@ -1390,6 +1465,7 @@ def build_render_plan(
     if title.byte_length() > 0:
         if figure.title_kind() == TextKind.PLAIN:
             title_layout = _plain_title_layout(
+                metrics,
                 title,
                 available_title_width,
                 title_font_size,
@@ -1398,11 +1474,17 @@ def build_render_plan(
         else:
             title_layout = _TitleLayout(title.copy(), String(), title_font_size)
     title_font_size = title_layout.font_size
-    var title_height = _role_text_height(title_font_size, figure.title_kind())
+    var title_height = _role_text_height(metrics, title_font_size, figure.title_kind())
+    var title_ascent = _measure_ascent(metrics, title_font_size)
+    var title_descent = _measure_descent(metrics, title_font_size)
+    if measured_face:
+        title_height = max(title_height, title_ascent + title_descent)
     var measured_top = edge_buffer
     if title_layout.line_count() > 0:
         measured_top += title_height * Float64(title_layout.line_count())
         measured_top += _points_to_logical(4.0)
+    if measured_face:
+        measured_top = max(measured_top, edge_buffer + tick_label_height / 2.0)
     var effective_margins = Margins(
         effective_left,
         effective_right,
@@ -1444,6 +1526,7 @@ def build_render_plan(
         is_x=False,
     )
     var x_label_visibility = _x_tick_label_visibility(
+        metrics,
         x_ticks,
         x_tick_labels,
         x_mapper,
@@ -1457,9 +1540,9 @@ def build_render_plan(
         _points_to_logical(2.0),
     )
     if x_label.byte_length() > 0 and figure.x_label_kind() == TextKind.PLAIN:
-        x_label = _ellipsize_text(x_label, axis_font_size, area.width())
+        x_label = _ellipsize_text(metrics, x_label, axis_font_size, area.width())
     if y_label.byte_length() > 0 and figure.y_label_kind() == TextKind.PLAIN:
-        y_label = _ellipsize_text(y_label, axis_font_size, area.height())
+        y_label = _ellipsize_text(metrics, y_label, axis_font_size, area.height())
 
     # Size command-heavy plans before appending any command. Series topology and
     # tick lists already expose every data-dependent command count; the legend
@@ -1538,7 +1621,10 @@ def build_render_plan(
             _text_command(
                 CommandKind.X_LABEL,
                 x,
-                bottom + tick_length + tick_padding + tick_font_size * 0.8,
+                bottom
+                + tick_length
+                + tick_padding
+                + (tick_ascent if measured_face else tick_font_size * 0.8),
                 x_tick_labels[tick_index].copy(),
                 tick_font_size,
             )
@@ -1571,7 +1657,12 @@ def build_render_plan(
             _text_command(
                 CommandKind.Y_LABEL,
                 area.x() - tick_length - tick_padding,
-                y + tick_font_size * 0.32,
+                y
+                + (
+                    (tick_ascent - tick_descent)
+                    / 2.0 if measured_face else tick_font_size
+                    * 0.32
+                ),
                 y_tick_labels[tick_index].copy(),
                 tick_font_size,
             )
@@ -1580,6 +1671,8 @@ def build_render_plan(
     if title_layout.line_count() > 0:
         var title_gap = _points_to_logical(4.0)
         var last_title_y = area.y() - title_gap
+        if measured_face and figure.title_kind() == TextKind.PLAIN:
+            last_title_y -= title_descent
         if figure.title_kind() == TextKind.TYPST_MATH:
             # The matching 2.4-em viewport extends 0.9 em below this anchor.
             last_title_y -= title_font_size * 0.9
@@ -1616,7 +1709,11 @@ def build_render_plan(
                 )
             )
     if x_label.byte_length() > 0:
-        var x_title_y = height - edge_buffer - axis_font_size * 0.15
+        var x_title_y = (
+            height
+            - edge_buffer
+            - (axis_descent if measured_face else axis_font_size * 0.15)
+        )
         if figure.x_label_kind() == TextKind.TYPST_MATH:
             x_title_y = height - edge_buffer - axis_font_size * 0.9
         commands.append(
@@ -1630,7 +1727,9 @@ def build_render_plan(
             )
         )
     if y_label.byte_length() > 0:
-        var y_title_x = edge_buffer + axis_font_size * 0.5
+        var y_title_x = edge_buffer + (
+            axis_ascent if measured_face else axis_font_size * 0.5
+        )
         if figure.y_label_kind() == TextKind.TYPST_MATH:
             y_title_x = edge_buffer + axis_font_size * 0.9
         commands.append(
@@ -1777,16 +1876,20 @@ def build_render_plan(
         var legend_gap = _points_to_logical(4.0)
         var legend_handle = _points_to_logical(12.0)
         var legend_glyph_width = legend_handle
+        var legend_ascent = _measure_ascent(metrics, legend_font_size)
+        var legend_descent = _measure_descent(metrics, legend_font_size)
         var legend_row_height = max(
-            text_height(legend_font_size), _points_to_logical(10.0)
+            _measure_height(metrics, legend_font_size), _points_to_logical(10.0)
         )
+        if measured_face:
+            legend_row_height = max(legend_row_height, legend_ascent + legend_descent)
         for order_index in range(figure._series_count()):
             var label = figure._series_label(order_index)
             if label.byte_length() == 0:
                 continue
             labeled_count += 1
             longest_label_width = max(
-                longest_label_width, text_width(label, legend_font_size)
+                longest_label_width, _measure_text(metrics, label, legend_font_size)
             )
             var style = figure._series_style(order_index)
             if figure._series_is_line(order_index):
@@ -1951,7 +2054,12 @@ def build_render_plan(
                     _text_command(
                         CommandKind.LEGEND_TEXT,
                         glyph_x + legend_glyph_width + legend_gap,
-                        center_y + legend_font_size * 0.32,
+                        center_y
+                        + (
+                            (legend_ascent - legend_descent)
+                            / 2.0 if measured_face else legend_font_size
+                            * 0.32
+                        ),
                         label^,
                         legend_font_size,
                     )
@@ -1968,6 +2076,8 @@ def build_render_plan(
         theme,
         accessible_title=figure.title().copy(),
         accessible_description=figure.accessible_description().copy(),
+        nominal_glyphs=metrics.nominal_glyphs(),
+        text_font_weight=font_weight,
     )
 
 
@@ -1991,6 +2101,37 @@ def build_render_plan(figure: Figure) raises -> RenderPlan:
         config.logical_width(),
         config.logical_height(),
         Margins(12.0, 12.0, 12.0, 12.0),
+    )
+    plan.figure_config = config
+    plan.validate()
+    return plan^
+
+
+def build_render_plan(
+    figure: Figure, width: Float64, height: Float64, margins: Margins
+) raises -> RenderPlan:
+    """Lower explicit geometry with deterministic fallback measurements."""
+    return _build_render_plan(figure, width, height, margins, FallbackTextMetrics())
+
+
+def build_render_plan[
+    M: TextMetrics
+](
+    figure: Figure, width: Float64, height: Float64, margins: Margins, metrics: M
+) raises -> RenderPlan:
+    """Lower explicit geometry using a caller-owned text metrics provider."""
+    return _build_render_plan(figure, width, height, margins, metrics)
+
+
+def build_render_plan[M: TextMetrics](figure: Figure, metrics: M) raises -> RenderPlan:
+    """Lower physical geometry with font measurements, ready for any encoder."""
+    var config = figure.config()
+    var plan = _build_render_plan(
+        figure,
+        config.logical_width(),
+        config.logical_height(),
+        Margins(12.0, 12.0, 12.0, 12.0),
+        metrics,
     )
     plan.figure_config = config
     plan.validate()

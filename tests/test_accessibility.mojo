@@ -11,9 +11,9 @@ def _plot() raises -> Plot:
 def test_description_survives_semantic_and_plan_boundaries() raises:
     var description = String("Input < 2 & response > 0; fit and measured series. 日本語")
     var plot = _plot().with_description(description.copy())
-    assert_equal(plot.figure().accessible_description(), description)
+    assert_equal(plot.figure().accessible_description().value(), description)
     var plan = plot.build_render_plan()
-    assert_equal(plan.accessible_description, description)
+    assert_equal(plan.accessible_description.value(), description)
     var svg = encode_svg(plan)
     assert_true('role="img"' in svg)
     assert_true("<title>Calibration</title>" in svg)
@@ -25,7 +25,7 @@ def test_description_survives_semantic_and_plan_boundaries() raises:
     changed.accessible_description = String("Other")
     assert_true(changed != plan)
     var figure = plot^.into_figure()
-    assert_equal(figure.accessible_description(), description)
+    assert_equal(figure.accessible_description().value(), description)
     figure.set_accessible_description(String())
     assert_true("<desc>Scientific plot rendered by Sen.</desc>" in figure.render_svg())
 

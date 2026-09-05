@@ -5,8 +5,9 @@ from .lowering import build_render_plan as _build_figure_render_plan
 from .render_plan import RenderPlan
 from .series import AxisKind, Figure, LegendPosition, MissingPolicy, StepMode
 from .style import SeriesStyle
-from .svg import render_svg as _render_figure_svg, write_svg as _write_svg
+from .svg import render_svg as _render_figure_svg, write_svg as _write_svg, encode_svg
 from .text import Text
+from .text_metrics import TextMetrics
 from .theme import Theme
 from .typst import TypstOptions
 
@@ -659,6 +660,15 @@ struct Plot(Copyable):
     ) raises -> RenderPlan:
         """Lower legacy reference-pixel geometry with adaptive margins."""
         return _build_figure_render_plan(self._figure, width, height)
+
+    def build_render_plan[M: TextMetrics](self, metrics: M) raises -> RenderPlan:
+        """Prepare layout using an explicit font metrics provider."""
+        return _build_figure_render_plan(self._figure, metrics)
+
+    def render_svg[M: TextMetrics](self, metrics: M) raises -> String:
+        """Render using explicit font metrics and default Typst options."""
+        var plan = self.build_render_plan(metrics)
+        return encode_svg(plan)
 
     def build_render_plan(self) raises -> RenderPlan:
         """Lower using the plot's stored physical size and logical geometry."""

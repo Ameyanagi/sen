@@ -377,7 +377,9 @@ struct RenderPlan(Copyable, Equatable):
     var theme: Theme
     var figure_config: Optional[FigureConfig]
     var accessible_title: String
-    var accessible_description: String
+    var accessible_description: Optional[String]
+    var nominal_glyphs: Bool
+    var text_font_weight: Optional[Int]
     var commands: List[DrawCommand]
 
     def __init__(
@@ -392,7 +394,9 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme = Theme(),
         figure_config: Optional[FigureConfig] = None,
         var accessible_title: String = String(),
-        var accessible_description: String = String(),
+        var accessible_description: Optional[String] = None,
+        nominal_glyphs: Bool = False,
+        text_font_weight: Optional[Int] = None,
     ) raises:
         self.width = width
         self.height = height
@@ -404,6 +408,8 @@ struct RenderPlan(Copyable, Equatable):
         self.figure_config = figure_config
         self.accessible_title = accessible_title^
         self.accessible_description = accessible_description^
+        self.nominal_glyphs = nominal_glyphs
+        self.text_font_weight = text_font_weight
         self.commands = commands^
         self.validate()
 
@@ -419,7 +425,9 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme = Theme(),
         figure_config: Optional[FigureConfig] = None,
         var accessible_title: String = String(),
-        var accessible_description: String = String(),
+        var accessible_description: Optional[String] = None,
+        nominal_glyphs: Bool = False,
+        text_font_weight: Optional[Int] = None,
     ) -> Self:
         return Self(
             width,
@@ -433,6 +441,8 @@ struct RenderPlan(Copyable, Equatable):
             figure_config,
             accessible_title^,
             accessible_description^,
+            nominal_glyphs,
+            text_font_weight,
             _validated=_Validated(),
         )
 
@@ -448,7 +458,9 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme,
         figure_config: Optional[FigureConfig],
         var accessible_title: String,
-        var accessible_description: String,
+        var accessible_description: Optional[String],
+        nominal_glyphs: Bool,
+        text_font_weight: Optional[Int],
         *,
         _validated: _Validated,
     ):
@@ -462,6 +474,8 @@ struct RenderPlan(Copyable, Equatable):
         self.figure_config = figure_config
         self.accessible_title = accessible_title^
         self.accessible_description = accessible_description^
+        self.nominal_glyphs = nominal_glyphs
+        self.text_font_weight = text_font_weight
         self.commands = commands^
 
     def command_count(self) -> Int:
@@ -477,6 +491,10 @@ struct RenderPlan(Copyable, Equatable):
     def validate(self) raises:
         """Validate finite positive geometry and every ordered command."""
         self.theme.validate()
+        if self.text_font_weight:
+            var weight = self.text_font_weight.value()
+            if weight < 1 or weight > 1000:
+                raise Error("text font weight must be within 1..1000; got ", weight)
         if (
             not isfinite(self.width)
             or not isfinite(self.height)
@@ -524,6 +542,8 @@ struct RenderPlan(Copyable, Equatable):
             or self.figure_config != other.figure_config
             or self.accessible_title != other.accessible_title
             or self.accessible_description != other.accessible_description
+            or self.nominal_glyphs != other.nominal_glyphs
+            or self.text_font_weight != other.text_font_weight
             or len(self.commands) != len(other.commands)
         ):
             return False

@@ -22,6 +22,7 @@ fi
 
 pixi run rattler-build package extract \
   --dest "$metadata_dir" "${artifacts[0]}" >/dev/null
+test -f "$metadata_dir/lib/mojo/sen_kumihan.mojo"
 python3 - "$metadata_dir/info/index.json" <<'PY'
 import json
 import sys
