@@ -377,6 +377,7 @@ struct RenderPlan(Copyable, Equatable):
     var theme: Theme
     var figure_config: Optional[FigureConfig]
     var accessible_title: String
+    var accessible_description: String
     var commands: List[DrawCommand]
 
     def __init__(
@@ -391,6 +392,7 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme = Theme(),
         figure_config: Optional[FigureConfig] = None,
         var accessible_title: String = String(),
+        var accessible_description: String = String(),
     ) raises:
         self.width = width
         self.height = height
@@ -401,6 +403,7 @@ struct RenderPlan(Copyable, Equatable):
         self.theme = theme
         self.figure_config = figure_config
         self.accessible_title = accessible_title^
+        self.accessible_description = accessible_description^
         self.commands = commands^
         self.validate()
 
@@ -416,6 +419,7 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme = Theme(),
         figure_config: Optional[FigureConfig] = None,
         var accessible_title: String = String(),
+        var accessible_description: String = String(),
     ) -> Self:
         return Self(
             width,
@@ -428,6 +432,7 @@ struct RenderPlan(Copyable, Equatable):
             theme,
             figure_config,
             accessible_title^,
+            accessible_description^,
             _validated=_Validated(),
         )
 
@@ -443,6 +448,7 @@ struct RenderPlan(Copyable, Equatable):
         theme: Theme,
         figure_config: Optional[FigureConfig],
         var accessible_title: String,
+        var accessible_description: String,
         *,
         _validated: _Validated,
     ):
@@ -455,6 +461,7 @@ struct RenderPlan(Copyable, Equatable):
         self.theme = theme
         self.figure_config = figure_config
         self.accessible_title = accessible_title^
+        self.accessible_description = accessible_description^
         self.commands = commands^
 
     def command_count(self) -> Int:
@@ -516,6 +523,7 @@ struct RenderPlan(Copyable, Equatable):
             or self.theme != other.theme
             or self.figure_config != other.figure_config
             or self.accessible_title != other.accessible_title
+            or self.accessible_description != other.accessible_description
             or len(self.commands) != len(other.commands)
         ):
             return False

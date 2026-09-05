@@ -1684,6 +1684,7 @@ struct Figure(Copyable):
     var _rectangle_styles: List[SeriesStyle]
     var _order: List[_SeriesOrder]
     var _title: String
+    var _accessible_description: String
     var _title_kind: TextKind
     var _x_label: String
     var _x_label_kind: TextKind
@@ -1724,6 +1725,7 @@ struct Figure(Copyable):
         self._rectangle_styles = List[SeriesStyle]()
         self._order = List[_SeriesOrder]()
         self._title = String()
+        self._accessible_description = String()
         self._title_kind = TextKind.PLAIN
         self._x_label = String()
         self._x_label_kind = TextKind.PLAIN
@@ -2049,6 +2051,18 @@ struct Figure(Copyable):
         """Bin finite data within an explicit inclusive range."""
         var series = RectangleSeries._histogram(data, bins, True, range_lo, range_hi)
         self._insert_rectangles(series^, label^, style)
+
+    def set_accessible_description(mut self, var description: String):
+        """Set optional author-written plain text for the exported description.
+
+        Empty text restores the generic default. XML scalar validation occurs
+        at encoding, consistently with other plot text.
+        """
+        self._accessible_description = description^
+
+    def accessible_description(self) -> ref[self._accessible_description] String:
+        """Borrow the author-written description; empty means unspecified."""
+        return self._accessible_description
 
     def set_title(mut self, var title: String):
         """Set title text exactly and deterministically without raising."""

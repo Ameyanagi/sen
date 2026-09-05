@@ -418,6 +418,15 @@ struct Plot(Copyable):
         )
         return self^
 
+    def description(mut self, var text: String):
+        """Set an author-written plain-text accessible plot description."""
+        self._figure.set_accessible_description(text^)
+
+    def with_description(var self, var text: String) -> Self:
+        """Consume the plot and attach its accessible description."""
+        self.description(text^)
+        return self^
+
     def title(mut self, var text: String):
         """Set the plot title exactly as supplied."""
         self._figure.set_title(text^)

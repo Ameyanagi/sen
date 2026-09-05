@@ -1967,6 +1967,7 @@ def build_render_plan(
         commands^,
         theme,
         accessible_title=figure.title().copy(),
+        accessible_description=figure.accessible_description().copy(),
     )
 
 

@@ -820,7 +820,12 @@ def _encode_svg(plan: RenderPlan, options: TypstOptions) raises -> String:
     svg += "  <title>"
     svg += _escape_xml(accessible_title)
     svg += "</title>\n"
-    svg += "  <desc>Scientific plot rendered by Sen.</desc>\n"
+    svg += "  <desc>"
+    if plan.accessible_description.byte_length() > 0:
+        svg += _escape_xml(plan.accessible_description)
+    else:
+        svg += "Scientific plot rendered by Sen."
+    svg += "</desc>\n"
     var background = plan.theme.background()
     var foreground = plan.theme.foreground()
     var grid = plan.theme.grid()
