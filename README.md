@@ -21,7 +21,7 @@ channels = [
 Then add the package:
 
 ```sh
-pixi add mojo-sen
+pixi add "mojo-sen==0.1.0" "mojo==1.0.0"
 ```
 
 Then import `sen` from your Mojo code and run your own file:
@@ -38,6 +38,13 @@ pixi install --locked
 pixi run mojo run -I src my_plot.mojo
 ```
 
+The examples below target the published immutable **0.1.0** package and also
+compile against current source. Fluent `Plot.with_*`, physical sizing, themes,
+Typst math, font metrics, and accessible descriptions are **unreleased**;
+see the [source API guide](docs/current-api.md) when working from a checkout.
+CI compiles and runs this README against the actual channel package, with no
+source import path, on Linux x86-64, Linux ARM64, and macOS ARM64.
+
 ## Quickstart
 
 ```mojo
@@ -50,162 +57,24 @@ def main() raises:
     var fitted: List[Float64] = [1.0, 2.0, 3.0, 4.0, 5.0]
     var measured: List[Float64] = [0.9, 2.2, 2.8, 4.1, 5.2]
 
-    var plot = (
-        Plot()
-        .with_line(x, fitted, label="fit")
-        .with_scatter(x, measured, label="measured")
-        .with_title("Calibration")
-        .with_xlabel("input")
-        .with_ylabel("response")
-        .with_size(7.2, 4.8)
-        .with_grid()
-    )
+    var plot = Plot()
+    plot.line(x, fitted, label="fit")
+    plot.scatter(x, measured, label="measured")
+    plot.title("Calibration")
+    plot.xlabel("input")
+    plot.ylabel("response")
+    plot.grid()
 
-    plot.save_svg("output/two_series.svg")
+    plot.save_svg("output/two_series.svg", width=720.0, height=480.0)
 ```
 
 From a checkout, run it with `pixi run mojo run -I src my_plot.mojo` (or
 `pixi run mojo run my_plot.mojo` with the package installed). It writes
 `output/two_series.svg`, creating the directory if needed. `Plot.render_svg()`
 returns the SVG document when an in-memory result is more convenient.
-`Plot.save_svg(path)` uses the stored physical size (6.4 by 4.8 inches by
-default) and replaces `path`. The lower-level `Figure`, free `render_svg`, and
-compatibility `save_svg(path, svg)` APIs remain available. New code that
-already has SVG bytes should use the unambiguous `write_svg(path, svg)` name.
-
-Every `Plot` data and configuration mutator has a consuming `with_*`
-counterpart for fluent construction. The consuming methods return an owned
-`Plot`, not a reference, so chaining an rvalue moves the same plot through the
-expression without copying its retained series. The original mutable calls
-remain supported when incremental control flow is clearer:
-
-```mojo
-from sen import Plot
-from std.collections import List
-
-
-def main() raises:
-    var x: List[Float64] = [0.0, 1.0]
-    var y: List[Float64] = [1.0, 2.0]
-    var plot = Plot()
-    plot.line(x, y)
-    plot.title("Mutable construction")
-    var svg = plot.render_svg()
-```
-
-To continue a consuming chain from a named plot without copying it, transfer
-the value explicitly: `var updated = plot^.with_grid()`.
-
-`Plot.figure()` borrows the underlying renderer-neutral `Figure`, while
-`into_figure()` consumes the plot and transfers that figure without copying its
-series. Passing an owned `Figure` to `Plot(figure^)` performs the reverse
-transfer. `Plot.build_render_plan()` prepares a backend-neutral plan; encode it
-without repeating layout work using `encode_svg(plan)`, then persist the result
-with `write_svg(path, svg)`. The geometry overloads on `build_render_plan`,
-`render_svg`, and `save_svg` accept explicit `Margins` when layout control is
-required. Their numeric width and height are legacy logical-coordinate
-overloads; prefer `with_size(width_inches, height_inches)` in new code.
-
-## Size, DPI, and design
-
-Physical size and export resolution are independent. `with_size(8.0, 5.0)`
-sets inches. `with_dpi(300.0)` changes the pixel dimensions requested by a
-future raster backend without changing SVG geometry, typography, or physical
-size. `with_size_px(2400, 1500)` converts pixels through the current DPI while
-leaving that DPI unchanged. The no-argument SVG renderer therefore emits a
-physical root and stable logical view box such as:
-
-```xml
-<svg width="8in" height="5in" viewBox="0 0 800 500">
-```
-
-Typography, strokes, and marker sizes use physical point sizes and are
-converted once into the DPI-independent logical coordinate space. Automatic
-margins are measured from the title, axis labels, tick labels, and legend.
-Every tick and grid mark is emitted; overlapping labels are deterministically
-selected from their mapped extents. Long titles are fitted, and the default
-`LegendPosition.BEST` scores all four plot corners against series geometry.
-
-The default font stack covers common Japanese, Simplified and Traditional
-Chinese, and Korean system fonts. Sen preserves Unicode text exactly and uses
-deterministic CJK/emoji-aware fallback metrics for layout. A theme can be
-changed without affecting data or geometry:
-
-```mojo
-from sen import Plot, Theme
-
-
-def main() raises:
-    var plot = Plot().with_theme(Theme.dark()).with_size(7.0, 4.5)
-    plot.validate()
-```
-
-### Optional Typst math
-
-Plain text remains the zero-dependency default. Mark only mathematical roles
-that should be compiled by a local [Typst](https://typst.app/) executable:
-
-```mojo
-from sen import Plot, Text, TypstOptions
-from std.collections import List
-
-
-def main() raises:
-    var x: List[Float64] = [0.0, 1.0, 2.0]
-    var y: List[Float64] = [0.0, 1.0, 4.0]
-    var plot = (
-        Plot()
-        .with_line(x, y)
-        .with_title(Text.typst_math("$ y = x^2 $"))
-        .with_xlabel(Text.typst_math("$ x $"))
-    )
-    plot.save_svg("output/math.svg", TypstOptions())
-```
-
-`Text.typst_math` accepts trusted Typst markup, including its `$...$` math
-delimiters; it is not a LaTeX compatibility layer. Sen invokes Typst only when
-rendering a marked value. The compiler runs in a fresh temporary root with a
-wall timeout, captured diagnostics, shell-quoted paths, and bounded source and
-SVG sizes. Configure a non-default executable or tighter limits with
-`TypstOptions`. Plain strings and `Text.plain(...)` never start or validate a
-Typst process.
-
-Every embedded Typst resource ID includes its deterministic render-command
-index, so repeated mathematical roles within one figure remain unique. When
-several complete Sen SVG figures are inlined into the same document, give each
-figure its own validated ID prefix while preserving reproducible output:
-
-```mojo
-from sen import TypstOptions
-
-
-def main() raises:
-    var options = TypstOptions().with_id_prefix("results-panel-2")
-    options.validate()
-```
-
-Prefixes use the safe ASCII form `[A-Za-z_][A-Za-z0-9_-]*` and are limited to
-64 bytes. Pass the configured options to `render_svg` or `save_svg`; rendering
-the same figure with the same options remains byte-for-byte deterministic.
-
-### CJK locale
-
-Choose a locale when shared Han ideographs must use language-correct glyph
-forms. This also emits matching SVG `lang` and `xml:lang` metadata and reorders
-the fallback fonts:
-
-```mojo
-from sen import TextLocale, Theme, Typography
-
-
-def main() raises:
-    var typography = Typography().with_locale(TextLocale.ZH_HANT)
-    var theme = Theme().with_typography(typography)
-    theme.validate()
-```
-
-The supported explicit values are `JA`, `ZH_HANS`, `ZH_HANT`, and `KO`;
-`AUTO` preserves the locale-neutral fallback order.
+`Plot.save_svg(path)` renders once at 640x480 and replaces `path`; optional
+width and height arguments select a different size. The lower-level `Figure`,
+free `render_svg`, and free `save_svg` APIs remain available.
 
 ## Scope
 
@@ -225,14 +94,10 @@ the wider ecosystem.
 missing markers. Automatic colors cycle deterministically through the first six
 Tableau-10 colors in insertion order. Use `SeriesStyle(color="#rrggbb")` or
 `.with_color(...)` for an explicit color, and `.with_line_width(...)` or
-`.with_marker_style(...)` for further styling. Marker size and line width are
-specified in points; opacity, line caps, and joins are also chainable on
-`SeriesStyle`. Select `AxisKind.LOG10` with
+`.with_marker_style(...)` for further styling. Select `AxisKind.LOG10` with
 `xscale` or `yscale`; log data and limits must be positive. Explicit limits are
-exact and `clear_xlim()` / `clear_ylim()` restore automatic bounds. `xticks()`
-and `yticks()` install owned positions and labels; their matching clear calls
-restore automatic ticks. `grid()` adds major gridlines, and a legend renders if
-and only if at least one series has a nonempty label unless
+exact, `grid()` adds major gridlines, and a legend renders if and only if at
+least one series has a nonempty label unless
 `legend(LegendPosition.NONE)` suppresses it.
 
 The complete basic family uses the same stateful vocabulary:
@@ -240,7 +105,6 @@ The complete basic family uses the same stateful vocabulary:
 `errorbar(x, y, y_error)` or `errorbar(x, y, x_error, y_error)`,
 `area(x, y, baseline=0.0)`, `bar(x, height)`, `bar(categories, height)`, and
 `histogram(data, bins=10)`.
-Prefix any of these calls with `with_` to use it in a fluent `Plot` chain.
 See [Basic 2D plots](docs/basic-plots.md) for validation, range, category, and
 performance contracts, and [the runnable example](examples/basic_plots.mojo)
 for SVG output.
@@ -275,8 +139,7 @@ def main() raises:
     figure.save_svg("output/decay.svg")
 ```
 
-The omitted dimensions use the default 6.4-by-4.8-inch canvas and a stable
-640-by-480 logical SVG view box.
+The omitted dimensions use the default 640x480 canvas.
 
 SVG drawing elements retain inline presentation attributes and expose stable
 `sen-*` classes: backgrounds, frames, axes, ticks, tick labels, titles, axis

@@ -29,6 +29,14 @@ jobs:
         with:
           pixi-version: v0.76.2
           cache: true
+      - name: Verify published README in an isolated consumer
+        run: >-
+          pixi exec
+          --channel https://ameyanagi.github.io/mojo-channel
+          --channel https://conda.modular.com/max
+          --channel conda-forge
+          --spec 'mojo==1.0.0' --spec 'mojo-sen==0.1.0'
+          -- bash scripts/check-readme.sh --installed
       - name: Verify locked workspace
         run: pixi run --locked check
 
